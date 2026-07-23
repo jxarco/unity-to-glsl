@@ -1,0 +1,114 @@
+{
+  "m_SGVersion": 3,
+  "m_Type": "UnityEditor.ShaderGraph.GraphData",
+  "m_ObjectId": "1001",
+  "m_Properties": [
+    {
+      "m_Name": "BaseColor",
+      "m_DefaultValue": { "r": 0.2, "g": 0.6, "b": 1.0, "a": 1.0 },
+      "m_Type": "Color",
+      "m_ReferenceName": "_BaseColor"
+    },
+    {
+      "m_Name": "DissolveAmount",
+      "m_DefaultValue": 0.45,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_DissolveAmount"
+    },
+    {
+      "m_Name": "EdgeColor",
+      "m_DefaultValue": { "r": 1.0, "g": 0.35, "b": 0.05, "a": 1.0 },
+      "m_Type": "Color",
+      "m_ReferenceName": "_EdgeColor"
+    },
+    {
+      "m_Name": "EdgeWidth",
+      "m_DefaultValue": 0.08,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_EdgeWidth"
+    }
+  ],
+  "m_Nodes": [
+    {
+      "m_ObjectId": "node_time",
+      "m_Type": "UnityEditor.ShaderGraph.TimeNode",
+      "m_Name": "Time"
+    },
+    {
+      "m_ObjectId": "node_uv",
+      "m_Type": "UnityEditor.ShaderGraph.UVNode",
+      "m_Name": "UV"
+    },
+    {
+      "m_ObjectId": "node_sine",
+      "m_Type": "UnityEditor.ShaderGraph.SineNode",
+      "m_Name": "Sine"
+    },
+    {
+      "m_ObjectId": "node_noise",
+      "m_Type": "UnityEditor.ShaderGraph.GradientNoiseNode",
+      "m_Name": "Gradient Noise",
+      "m_Scale": 12.0
+    },
+    {
+      "m_ObjectId": "node_step",
+      "m_Type": "UnityEditor.ShaderGraph.StepNode",
+      "m_Name": "Step"
+    },
+    {
+      "m_ObjectId": "node_edgestep",
+      "m_Type": "UnityEditor.ShaderGraph.StepNode",
+      "m_Name": "Edge Step"
+    },
+    {
+      "m_ObjectId": "node_add_width",
+      "m_Type": "UnityEditor.ShaderGraph.AddNode",
+      "m_Name": "Add Width"
+    },
+    {
+      "m_ObjectId": "node_sub_edge",
+      "m_Type": "UnityEditor.ShaderGraph.SubtractNode",
+      "m_Name": "Subtract Edge"
+    },
+    {
+      "m_ObjectId": "node_edge_color",
+      "m_Type": "UnityEditor.ShaderGraph.MultiplyNode",
+      "m_Name": "Multiply Edge Color"
+    },
+    {
+      "m_ObjectId": "node_base_color",
+      "m_Type": "UnityEditor.ShaderGraph.MultiplyNode",
+      "m_Name": "Multiply Base Color"
+    },
+    {
+      "m_ObjectId": "node_final_color",
+      "m_Type": "UnityEditor.ShaderGraph.AddNode",
+      "m_Name": "Final Color"
+    },
+    {
+      "m_ObjectId": "node_target_lit",
+      "m_Type": "UnityEditor.ShaderGraph.UniversalTarget",
+      "m_Name": "Universal Lit Target"
+    }
+  ],
+  "m_Edges": [
+    { "fromNode": "node_time", "fromSlot": "Time", "toNode": "node_sine", "toSlot": "In" },
+    { "fromNode": "node_uv", "fromSlot": "Out", "toNode": "node_noise", "toSlot": "UV" },
+    { "fromNode": "node_noise", "fromSlot": "Out", "toNode": "node_step", "toSlot": "In" },
+    { "fromNode": "prop_DissolveAmount", "fromSlot": "Out", "toNode": "node_step", "toSlot": "Edge" },
+    { "fromNode": "prop_DissolveAmount", "fromSlot": "Out", "toNode": "node_add_width", "toSlot": "A" },
+    { "fromNode": "prop_EdgeWidth", "fromSlot": "Out", "toNode": "node_add_width", "toSlot": "B" },
+    { "fromNode": "node_noise", "fromSlot": "Out", "toNode": "node_edgestep", "toSlot": "In" },
+    { "fromNode": "node_add_width", "fromSlot": "Out", "toNode": "node_edgestep", "toSlot": "Edge" },
+    { "fromNode": "node_edgestep", "fromSlot": "Out", "toNode": "node_sub_edge", "toSlot": "A" },
+    { "fromNode": "node_step", "fromSlot": "Out", "toNode": "node_sub_edge", "toSlot": "B" },
+    { "fromNode": "node_sub_edge", "fromSlot": "Out", "toNode": "node_edge_color", "toSlot": "A" },
+    { "fromNode": "prop_EdgeColor", "fromSlot": "Out", "toNode": "node_edge_color", "toSlot": "B" },
+    { "fromNode": "node_step", "fromSlot": "Out", "toNode": "node_base_color", "toSlot": "A" },
+    { "fromNode": "prop_BaseColor", "fromSlot": "Out", "toNode": "node_base_color", "toSlot": "B" },
+    { "fromNode": "node_base_color", "fromSlot": "Out", "toNode": "node_final_color", "toSlot": "A" },
+    { "fromNode": "node_edge_color", "fromSlot": "Out", "toNode": "node_final_color", "toSlot": "B" },
+    { "fromNode": "node_final_color", "fromSlot": "Out", "toNode": "node_target_lit", "toSlot": "BaseColor" },
+    { "fromNode": "node_step", "fromSlot": "Out", "toNode": "node_target_lit", "toSlot": "Alpha" }
+  ]
+}

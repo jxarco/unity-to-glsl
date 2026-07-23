@@ -1,0 +1,257 @@
+/**
+ * Main Application Controller
+ */
+
+import { ShaderGraphParser } from './parser/shadergraph-parser.js';
+import { GLSLCodeGenerator } from './parser/glsl-codegen.js';
+import { Preview3D } from './viewport/preview-3d.js';
+import { Graph2DView } from './viewport/graph-2d.js';
+import { CodeEditorUI } from './ui/code-editor.js';
+import { PresetLoaderUI } from './ui/preset-loader.js';
+
+class Application {
+  constructor() {
+    this.parser = new ShaderGraphParser();
+    this.generator = new GLSLCodeGenerator();
+    this.preview3D = null;
+    this.graph2D = null;
+    this.codeEditor = null;
+    this.presetLoader = null;
+
+    this.currentParsedGraph = null;
+
+    this.init();
+  }
+
+  init() {
+    // 1. Initialize Viewports & UI
+    this.preview3D = new Preview3D('canvas-3d-container');
+    this.graph2D = new Graph2DView('graph-2d-container');
+    this.codeEditor = new CodeEditorUI('code-viewport');
+
+    // 2. Initialize Preset Loader
+    this.presetLoader = new PresetLoaderUI('preset-select', (presetJson, key) => {
+      this.loadShaderGraph(presetJson);
+    });
+
+    // 3. Setup UI Event Listeners
+    this.setupViewportTabs();
+    this.setupGeometrySelector();
+    this.setupDragAndDrop();
+    this.setupModal();
+
+    // 4. Load initial default preset
+    this.presetLoader.loadPreset('dissolve');
+  }
+
+  loadShaderGraph(jsonInput) {
+    try {
+      // Parse JSON AST
+      this.currentParsedGraph = this.parser.parse(jsonInput);
+
+      // Transpile to GLSL
+      const glslOutput = this.generator.transpile(this.currentParsedGraph);
+
+      // Update 3D Shader Viewport
+      this.preview3D.updateShaderMaterial(
+        glslOutput.threeVertexShader || glslOutput.vertexShader,
+        glslOutput.threeFragmentShader || glslOutput.fragmentShader,
+        this.currentParsedGraph.properties
+      );
+
+      // Update 2D Graph Viewport
+      this.graph2D.updateGraph(this.currentParsedGraph);
+
+      // Update Code Editor
+      this.codeEditor.updateCode(glslOutput);
+
+      // Render Graph Inspector & Properties Panel
+      this.renderGraphInspector();
+    } catch (err) {
+      console.error('Error compiling ShaderGraph:', err);
+      alert('Error parsing Unity 6 ShaderGraph: ' + err.message);
+    }
+  }
+
+  setupViewportTabs() {
+    const tab3D = document.getElementById('tab-view-3d');
+    const tab2D = document.getElementById('tab-view-2d');
+
+    const view3D = document.getElementById('view-3d');
+    const view2D = document.getElementById('view-2d');
+
+    if (tab3D && tab2D && view3D && view2D) {
+      tab3D.addEventListener('click', () => {
+        tab3D.classList.add('active');
+        tab2D.classList.remove('active');
+        view3D.classList.add('active');
+        view2D.classList.remove('active');
+        this.graph2D.deactivate();
+        this.preview3D.onWindowResize();
+      });
+
+      tab2D.addEventListener('click', () => {
+        tab2D.classList.add('active');
+        tab3D.classList.remove('active');
+        view2D.classList.add('active');
+        view3D.classList.remove('active');
+        this.graph2D.activate();
+      });
+    }
+  }
+
+  setupGeometrySelector() {
+    const geomSelect = document.getElementById('mesh-select');
+    if (geomSelect) {
+      geomSelect.addEventListener('change', (e) => {
+        this.preview3D.createMesh(e.target.value);
+      });
+    }
+  }
+
+  renderGraphInspector() {
+    const propContainer = document.getElementById('properties-container');
+    const nodeContainer = document.getElementById('nodes-container');
+
+    if (!this.currentParsedGraph) return;
+
+    // Render Properties controls
+    if (propContainer) {
+      propContainer.innerHTML = '';
+      if (this.currentParsedGraph.properties.length === 0) {
+        propContainer.innerHTML = `<div style="color:var(--text-muted); font-size:12px;">No properties in graph</div>`;
+      }
+
+      this.currentParsedGraph.properties.forEach(prop => {
+        const group = document.createElement('div');
+        group.className = 'prop-group';
+
+        const label = document.createElement('div');
+        label.className = 'prop-label';
+        label.innerHTML = `<span>${prop.name}</span><span class="prop-value">${prop.referenceName}</span>`;
+        group.appendChild(label);
+
+        if (prop.type === 'Color') {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'color-picker-wrapper';
+          const input = document.createElement('input');
+          input.type = 'color';
+          const defC = prop.defaultValue || { r: 1, g: 1, b: 1 };
+          const hexColor = '#' + [defC.r, defC.g, defC.b].map(x => {
+            const hex = Math.round((x || 0) * 255).toString(16);
+            return hex.length === 1 ? '0' + hex : hex;
+          }).join('');
+          input.value = hexColor;
+
+          input.addEventListener('input', (e) => {
+            this.preview3D.updateUniformValue(prop.referenceName, e.target.value);
+          });
+
+          wrapper.appendChild(input);
+          wrapper.appendChild(document.createTextNode(' Base Color'));
+          group.appendChild(wrapper);
+        } else if (prop.type === 'Vector1') {
+          const input = document.createElement('input');
+          input.type = 'range';
+          input.className = 'range-input';
+          input.min = '0';
+          input.max = '2';
+          input.step = '0.01';
+          input.value = prop.defaultValue !== undefined ? prop.defaultValue : 0.5;
+
+          const valSpan = document.createElement('span');
+          valSpan.className = 'prop-value';
+          valSpan.innerText = input.value;
+
+          input.addEventListener('input', (e) => {
+            valSpan.innerText = e.target.value;
+            this.preview3D.updateUniformValue(prop.referenceName, e.target.value);
+          });
+
+          label.appendChild(valSpan);
+          group.appendChild(input);
+        }
+
+        propContainer.appendChild(group);
+      });
+    }
+
+    // Render Node list
+    if (nodeContainer) {
+      nodeContainer.innerHTML = '';
+      this.currentParsedGraph.nodes.forEach(node => {
+        const item = document.createElement('div');
+        item.className = 'node-tree-item';
+        item.innerHTML = `
+          <span>${node.name}</span>
+          <span class="node-type-tag">${node.type}</span>
+        `;
+        nodeContainer.appendChild(item);
+      });
+    }
+  }
+
+  setupDragAndDrop() {
+    const dropzone = document.getElementById('file-dropzone');
+    const fileInput = document.getElementById('file-input');
+
+    if (dropzone && fileInput) {
+      dropzone.addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) this.readShaderFile(file);
+      });
+
+      window.addEventListener('dragover', (e) => e.preventDefault());
+      window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file && (file.name.endsWith('.shadergraph') || file.name.endsWith('.json') || file.name.endsWith('.txt'))) {
+          this.readShaderFile(file);
+        }
+      });
+    }
+  }
+
+  readShaderFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.loadShaderGraph(e.target.result);
+      const modal = document.getElementById('import-modal');
+      if (modal) modal.classList.remove('open');
+    };
+    reader.readAsText(file);
+  }
+
+  setupModal() {
+    const importBtn = document.getElementById('btn-open-import');
+    const modal = document.getElementById('import-modal');
+    const closeBtn = document.getElementById('btn-close-modal');
+    const parseTextBtn = document.getElementById('btn-parse-text');
+    const jsonTextarea = document.getElementById('json-textarea');
+
+    if (importBtn && modal && closeBtn) {
+      importBtn.addEventListener('click', () => modal.classList.add('open'));
+      closeBtn.addEventListener('click', () => modal.classList.remove('open'));
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('open');
+      });
+    }
+
+    if (parseTextBtn && jsonTextarea) {
+      parseTextBtn.addEventListener('click', () => {
+        const content = jsonTextarea.value.trim();
+        if (content) {
+          this.loadShaderGraph(content);
+          if (modal) modal.classList.remove('open');
+        }
+      });
+    }
+  }
+}
+
+// Instantiate on DOM load
+window.addEventListener('DOMContentLoaded', () => {
+  window.app = new Application();
+});

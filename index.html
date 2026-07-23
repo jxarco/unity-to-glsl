@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unity 6 ShaderGraph to GLSL Transpiler</title>
+  <meta name="description" content="Convert Unity 6 ShaderGraph assets to standard GLSL shader code with live WebGL 3D preview and interactive viewport.">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="./css/main.css">
+  <link rel="stylesheet" href="./css/components.css">
+</head>
+<body>
+
+  <div id="app">
+    <!-- Navbar Header -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="brand-logo">SG</div>
+        <div class="brand-title">ShaderGraph &rarr; GLSL Converter</div>
+        <span class="brand-tag">Unity 6</span>
+      </div>
+
+      <div class="nav-actions">
+        <label for="preset-select" style="font-size:12px; color:var(--text-muted); font-weight:500;">Preset:</label>
+        <select id="preset-select" class="select-input" aria-label="Select ShaderGraph Preset">
+          <option value="dissolve" selected>Dissolve Effect</option>
+          <option value="hologram">Hologram Scanlines</option>
+          <option value="pbr-rimlight">PBR Rimlight</option>
+        </select>
+
+        <button id="btn-open-import" class="btn btn-primary" aria-label="Import ShaderGraph File">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          Import .shadergraph
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Split Layout -->
+    <main class="main-content">
+
+      <!-- Left Panel: Graph Inspector & Properties -->
+      <aside class="panel">
+        <div class="panel-header">
+          <span class="panel-title">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+            </svg>
+            Graph Inspector
+          </span>
+        </div>
+        <div class="panel-body">
+          <div class="prop-group">
+            <div class="prop-label">Exposed Uniform Properties</div>
+            <div id="properties-container">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <div class="prop-group" style="margin-top: 24px;">
+            <div class="prop-label">Graph Nodes Topology</div>
+            <div id="nodes-container">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Panel: Viewport Area (3D Shader Preview / 2D Graph View) -->
+      <section class="viewport-panel">
+        <!-- Viewport Toolbar Header with Tab Switcher -->
+        <div class="viewport-toolbar">
+          <div class="viewport-tabs">
+            <button id="tab-view-3d" class="tab-btn active" aria-label="3D Shader Preview Tab">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+              </svg>
+              3D Shader Preview
+            </button>
+            <button id="tab-view-2d" class="tab-btn" aria-label="2D Graph View Tab">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+              </svg>
+              2D Graph View
+            </button>
+          </div>
+
+          <div class="viewport-controls">
+            <label for="mesh-select" style="font-size:12px; color:var(--text-muted); font-weight:500;">Mesh:</label>
+            <select id="mesh-select" class="select-input" aria-label="Select 3D Preview Geometry">
+              <option value="sphere" selected>Sphere</option>
+              <option value="cube">Cube</option>
+              <option value="torus">Torus Knot</option>
+              <option value="plane">Quad / Plane</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Viewport Containers -->
+        <div class="viewport-content">
+          <!-- 3D WebGL Shader View -->
+          <div id="view-3d" class="viewport-view active">
+            <div id="canvas-3d-container" style="width:100%; height:100%;"></div>
+          </div>
+
+          <!-- 2D Graph Canvas View (Prepared Tab) -->
+          <div id="view-2d" class="viewport-view">
+            <div id="graph-2d-container"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: GLSL Shader Code Editor -->
+      <aside class="panel">
+        <div class="panel-header">
+          <span class="panel-title">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+            </svg>
+            Generated GLSL Code
+          </span>
+
+          <div class="code-header-actions">
+            <div class="code-tabs">
+              <button class="code-tab" data-tab="vertex">Vertex</button>
+              <button class="code-tab active" data-tab="fragment">Fragment</button>
+              <button class="code-tab" data-tab="full">Full GLSL</button>
+            </div>
+
+            <button id="btn-copy-code" class="btn btn-secondary btn-sm" title="Copy to Clipboard" aria-label="Copy Code">
+              Copy
+            </button>
+            <button id="btn-download-glsl" class="btn btn-secondary btn-sm" title="Download .glsl File" aria-label="Download GLSL File">
+              Download
+            </button>
+          </div>
+        </div>
+
+        <div class="panel-body" style="padding:0;">
+          <div id="code-viewport" class="code-viewport">
+            <!-- Dynamically populated with syntax highlighted GLSL -->
+          </div>
+        </div>
+      </aside>
+
+    </main>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="import-modal" class="modal-overlay" aria-modal="true" role="dialog">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size:16px; font-weight:700;">Import Unity 6 ShaderGraph</h3>
+        <button id="btn-close-modal" class="btn btn-secondary btn-icon" aria-label="Close Modal">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="file-dropzone" class="dropzone">
+          <div class="dropzone-icon">📁</div>
+          <div style="font-weight:600; font-size:14px; margin-bottom:4px;">Drag & Drop `.shadergraph` file here</div>
+          <div style="font-size:12px; color:var(--text-muted);">or click to browse from your computer</div>
+          <input type="file" id="file-input" accept=".shadergraph,.json,.txt" style="display:none;">
+        </div>
+
+        <div style="margin: 16px 0 8px; font-size:12px; font-weight:600; color:var(--text-muted);">OR Paste ShaderGraph JSON:</div>
+        <textarea id="json-textarea" class="json-textarea" placeholder="Paste Unity 6 .shadergraph JSON content here..."></textarea>
+
+        <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:8px;">
+          <button id="btn-parse-text" class="btn btn-primary">Parse & Transpile</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entry Script -->
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
