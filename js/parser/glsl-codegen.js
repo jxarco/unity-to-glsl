@@ -17,10 +17,15 @@ export class GLSLCodeGenerator {
 
   /** Infer the GLSL type of a known expression string */
   inferType(expr) {
+    if (!expr) return 'float';
     if (this.typeMap.has(expr)) return this.typeMap.get(expr);
     if (expr.startsWith('vec4')) return 'vec4';
     if (expr.startsWith('vec3')) return 'vec3';
     if (expr.startsWith('vec2')) return 'vec2';
+    if (expr.includes('.xy')) return 'vec2';
+    if (expr.includes('.rgb')) return 'vec3';
+    if (expr.endsWith('.x') || expr.endsWith('.y') || expr.endsWith('.z') || expr.endsWith('.w') ||
+        expr.endsWith('.r') || expr.endsWith('.g') || expr.endsWith('.b') || expr.endsWith('.a')) return 'float';
     return 'float';
   }
 
@@ -34,10 +39,21 @@ export class GLSLCodeGenerator {
   castTo(expr, fromType, toType) {
     if (fromType === toType) return expr;
     if (toType === 'float') {
-      if (fromType === 'vec4') return `${expr}.x`;
-      if (fromType === 'vec3') return `${expr}.x`;
-      if (fromType === 'vec2') return `${expr}.x`;
+      if (fromType === 'vec4' || fromType === 'vec3' || fromType === 'vec2') return `${expr}.x`;
       return expr;
+    }
+    if (toType === 'vec4') {
+      if (fromType === 'vec3') return `vec4(${expr}, 1.0)`;
+      if (fromType === 'vec2') return `vec4(${expr}, 0.0, 1.0)`;
+      return `vec4(vec3(${expr}), 1.0)`;
+    }
+    if (toType === 'vec3') {
+      if (fromType === 'vec4') return `${expr}.rgb`;
+      return `vec3(${expr})`;
+    }
+    if (toType === 'vec2') {
+      if (fromType === 'vec4' || fromType === 'vec3') return `${expr}.xy`;
+      return `vec2(${expr})`;
     }
     return `${toType}(${expr})`;
   }
@@ -96,7 +112,7 @@ export class GLSLCodeGenerator {
       this.transpileNode(node, edges, nodeVarMap, codeBody);
     });
 
-    // 3. Resolve Target Node Outputs (BaseColor, Emission, Alpha, AlphaClip)
+    // 3. Resolve Target Node Outputs (BaseColor, Color, Emission, Alpha, AlphaClip)
     let finalBaseColor = 'vec4(1.0, 1.0, 1.0, 1.0)';
     let finalAlpha = '1.0';
     let finalEmission = 'vec3(0.0)';
@@ -104,10 +120,11 @@ export class GLSLCodeGenerator {
     if (target) {
       const incoming = edges.filter(e => e.toNode === target.id);
       incoming.forEach(e => {
-        const val = nodeVarMap.get(`${e.fromNode}_${e.fromSlot}`) || 'vec4(1.0)';
-        if (e.toSlot === 'BaseColor') finalBaseColor = this.ensureVec4(val);
-        else if (e.toSlot === 'Alpha') finalAlpha = this.ensureFloat(val);
-        else if (e.toSlot === 'Emission') finalEmission = this.ensureVec3(val);
+        const val = nodeVarMap.get(`${e.fromNode}_${e.fromSlot}`) || nodeVarMap.get(`${e.fromNode}_Out`) || 'vec4(1.0)';
+        const slot = e.toSlot ? e.toSlot.toLowerCase() : '';
+        if (slot === 'basecolor' || slot === 'color' || slot === '0') finalBaseColor = this.ensureVec4(val);
+        else if (slot === 'alpha' || slot === '7') finalAlpha = this.ensureFloat(val);
+        else if (slot === 'emission') finalEmission = this.ensureVec3(val);
       });
     }
 
@@ -141,6 +158,38 @@ float gradientNoise(vec2 st) {
 
 float fresnelEffect(vec3 normal, vec3 viewDir, float power) {
     return pow(1.0 - clamp(dot(normalize(normal), normalize(viewDir)), 0.0, 1.0), power);
+}
+
+vec2 rotateUV(vec2 uv, vec2 center, float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    return mat2(c, -s, s, c) * (uv - center) + center;
+}
+
+vec2 voronoiHash(vec2 p) {
+    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+    return fract(sin(p) * 43758.5453);
+}
+
+float voronoiNoise(vec2 UV, float angleOffset, float cellDensity) {
+    vec2 st = UV * cellDensity;
+    vec2 g = floor(st);
+    vec2 f = fract(st);
+    float minDist = 8.0;
+
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 lattice = vec2(float(x), float(y));
+            vec2 rand = voronoiHash(g + lattice);
+            vec2 offset = 0.5 + 0.5 * sin(vec2(angleOffset) + rand * 6.2831853);
+            vec2 pos = lattice + offset - f;
+            float dist = dot(pos, pos);
+            if (dist < minDist) {
+                minDist = dist;
+            }
+        }
+    }
+    return sqrt(minDist);
 }
 
 void main() {
@@ -243,6 +292,38 @@ float fresnelEffect(vec3 normal, vec3 viewDir, float power) {
     return pow(1.0 - clamp(dot(normalize(normal), normalize(viewDir)), 0.0, 1.0), power);
 }
 
+vec2 rotateUV(vec2 uv, vec2 center, float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    return mat2(c, -s, s, c) * (uv - center) + center;
+}
+
+vec2 voronoiHash(vec2 p) {
+    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+    return fract(sin(p) * 43758.5453);
+}
+
+float voronoiNoise(vec2 UV, float angleOffset, float cellDensity) {
+    vec2 st = UV * cellDensity;
+    vec2 g = floor(st);
+    vec2 f = fract(st);
+    float minDist = 8.0;
+
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 lattice = vec2(float(x), float(y));
+            vec2 rand = voronoiHash(g + lattice);
+            vec2 offset = 0.5 + 0.5 * sin(vec2(angleOffset) + rand * 6.2831853);
+            vec2 pos = lattice + offset - f;
+            float dist = dot(pos, pos);
+            if (dist < minDist) {
+                minDist = dist;
+            }
+        }
+    }
+    return sqrt(minDist);
+}
+
 void main() {
     vec4 UV = vec4(v_uv, 0.0, 0.0);
     float Time = u_time;
@@ -273,12 +354,10 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
   transpileNode(node, edges, varMap, codeBody) {
     const getSlotVal = (slotName, defaultFallback) => {
-      // 1. Exact match
-      let edge = edges.find(e => e.toNode === node.id && e.toSlot === slotName);
-      // 2. Case-insensitive match
-      if (!edge) {
-        edge = edges.find(e => e.toNode === node.id && e.toSlot.toLowerCase() === slotName.toLowerCase());
-      }
+      let edge = edges.find(e => e.toNode === node.id && (
+        e.toSlot === slotName ||
+        String(e.toSlot).toLowerCase() === String(slotName).toLowerCase()
+      ));
       if (edge) {
         const val = varMap.get(`${edge.fromNode}_${edge.fromSlot}`) ||
                     varMap.get(`${edge.fromNode}_Out`) ||
@@ -332,6 +411,24 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         break;
       }
 
+      case 'VoronoiNode':
+      case 'Voronoi': {
+        const uvVal = getSlotVal('UV', 'UV.xy');
+        const angleVal = getSlotVal('AngleOffset', '2.0');
+        const densityVal = getSlotVal('CellDensity', '5.0');
+        const castUV = this.castTo(uvVal, this.inferType(uvVal), 'vec2');
+        const castAngle = this.castTo(angleVal, this.inferType(angleVal), 'float');
+        const castDensity = this.castTo(densityVal, this.inferType(densityVal), 'float');
+
+        codeBody.push(`float ${outVar} = voronoiNoise(${castUV}, ${castAngle}, ${castDensity});`);
+        this.typeMap.set(outVar, 'float');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_3`, outVar);
+        varMap.set(`${node.id}_Cells`, outVar);
+        break;
+      }
+
       case 'StepNode':
       case 'Step': {
         const edgeVal = getSlotVal('Edge', '0.5');
@@ -351,6 +448,64 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         codeBody.push(`float ${outVar} = fresnelEffect(Normal, ViewDir, ${castPow});`);
         this.typeMap.set(outVar, 'float');
         varMap.set(`${node.id}_Out`, outVar);
+        break;
+      }
+
+      case 'LerpNode':
+      case 'Lerp': {
+        const a = getSlotVal('A', '0.0');
+        const b = getSlotVal('B', '1.0');
+        const t = getSlotVal('T', '0.5');
+        const tA = this.inferType(a);
+        const tB = this.inferType(b);
+        const outType = this.promoteType(tA, tB);
+        const castA = this.castTo(a, tA, outType);
+        const castB = this.castTo(b, tB, outType);
+        const castT = this.castTo(t, this.inferType(t), 'float');
+        codeBody.push(`${outType} ${outVar} = mix(${castA}, ${castB}, ${castT});`);
+        this.typeMap.set(outVar, outType);
+        varMap.set(`${node.id}_Out`, outVar);
+        break;
+      }
+
+      case 'RotateNode':
+      case 'Rotate': {
+        const uvVal = getSlotVal('UV', 'UV.xy');
+        const centerVal = getSlotVal('Center', 'vec2(0.5, 0.5)');
+        const rotVal = getSlotVal('Rotation', '0.0');
+        const castUV = this.castTo(uvVal, this.inferType(uvVal), 'vec2');
+        const castCenter = this.castTo(centerVal, this.inferType(centerVal), 'vec2');
+        const castRot = this.castTo(rotVal, this.inferType(rotVal), 'float');
+
+        let unit = (node.raw && node.raw.m_Unit !== undefined) ? node.raw.m_Unit : 1;
+        let rotRad;
+        if (unit === 0) {
+          rotRad = castRot; // Radians
+        } else if (unit === 2) {
+          rotRad = `${castRot} * 6.283185307`; // Normalized 0..1
+        } else {
+          // unit === 1 (Degrees) or default: handle normalized 0..1 inputs (0..1 -> 0..2PI) or degree inputs
+          rotRad = `(${castRot} <= 1.0001 ? ${castRot} * 6.283185307 : ${castRot} * 0.01745329251)`;
+        }
+
+        codeBody.push(`vec2 ${outVar} = rotateUV(${castUV}, ${castCenter}, ${rotRad});`);
+        this.typeMap.set(outVar, 'vec2');
+        varMap.set(`${node.id}_Out`, outVar);
+        break;
+      }
+
+      case 'SplitNode':
+      case 'Split': {
+        const inVal = getSlotVal('In', 'vec4(0.0)');
+        const inType = this.inferType(inVal);
+        const vec4Val = this.castTo(inVal, inType, 'vec4');
+        codeBody.push(`vec4 ${outVar} = ${vec4Val};`);
+        this.typeMap.set(outVar, 'vec4');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_R`, `${outVar}.r`);
+        varMap.set(`${node.id}_G`, `${outVar}.g`);
+        varMap.set(`${node.id}_B`, `${outVar}.b`);
+        varMap.set(`${node.id}_A`, `${outVar}.a`);
         break;
       }
 
@@ -400,7 +555,6 @@ ${codeBody.map(line => '    ' + line).join('\n')}
       }
 
       default:
-        // Generic fallback for unhandled nodes
         varMap.set(`${node.id}_Out`, 'vec4(1.0)');
         this.typeMap.set('vec4(1.0)', 'vec4');
         break;

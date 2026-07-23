@@ -254,21 +254,63 @@ class Application {
           const input = document.createElement('input');
           input.type = 'range';
           input.className = 'range-input';
-          input.min = '0';
-          input.max = '2';
-          input.step = '0.01';
-          input.value = prop.defaultValue !== undefined ? prop.defaultValue : 0.45;
 
-          const valSpan = document.createElement('span');
-          valSpan.className = 'prop-value';
-          valSpan.innerText = input.value;
+          const nameLower = (prop.name + ' ' + prop.referenceName).toLowerCase();
+          const defaultVal = (typeof prop.defaultValue === 'number') ? prop.defaultValue : (prop.defaultValue?.x ?? 0.5);
 
+          const isRotation = nameLower.includes('rotation') || nameLower.includes('angle');
+          const isDensityOrScale = nameLower.includes('density') || nameLower.includes('scale') || nameLower.includes('tiling') || nameLower.includes('frequency');
+
+          let minVal, maxVal, stepVal;
+
+          if (prop.min !== undefined && prop.max !== undefined) {
+            minVal = prop.min;
+            maxVal = prop.max;
+            stepVal = (maxVal - minVal) > 10 ? 0.1 : 0.01;
+          } else if (isRotation) {
+            minVal = 0;
+            maxVal = defaultVal <= 1.0 ? 1 : 50;
+            stepVal = defaultVal <= 1.0 ? 0.01 : 0.1;
+          } else if (isDensityOrScale) {
+            minVal = 0.1;
+            maxVal = Math.max(30, defaultVal * 3);
+            stepVal = 0.1;
+          } else {
+            minVal = 0;
+            maxVal = Math.max(1, defaultVal > 1.0 ? defaultVal * 2 : 1);
+            stepVal = maxVal > 5 ? 0.1 : 0.01;
+          }
+
+          input.min = String(minVal);
+          input.max = String(maxVal);
+          input.step = String(stepVal);
+          input.value = String(defaultVal);
+
+          // Editable numeric input field
+          const numInput = document.createElement('input');
+          numInput.type = 'number';
+          numInput.className = 'prop-val-input';
+          numInput.step = 'any';
+          numInput.value = String(defaultVal);
+
+          // Sync range slider -> numeric input box
           input.addEventListener('input', (e) => {
-            valSpan.innerText = e.target.value;
+            numInput.value = e.target.value;
             this.preview3D.updateUniformValue(prop.referenceName, e.target.value);
           });
 
-          label.appendChild(valSpan);
+          // Sync numeric input box -> range slider & 3D viewport
+          numInput.addEventListener('input', (e) => {
+            const num = parseFloat(e.target.value);
+            if (!isNaN(num)) {
+              if (num > parseFloat(input.max)) input.max = String(num * 1.5);
+              if (num < parseFloat(input.min)) input.min = String(num);
+              input.value = String(num);
+              this.preview3D.updateUniformValue(prop.referenceName, num);
+            }
+          });
+
+          label.appendChild(numInput);
           group.appendChild(input);
         }
 

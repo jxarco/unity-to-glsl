@@ -10,7 +10,9 @@ export class PresetLoaderUI {
     this.presets = {
       'dissolve': './js/presets/dissolve.json',
       'hologram': './js/presets/hologram.json',
-      'pbr-rimlight': './js/presets/pbr-rimlight.json'
+      'linear-gradient': './js/presets/linear-gradient.json',
+      'pbr-rimlight': './js/presets/pbr-rimlight.json',
+      'voronoi': './js/presets/voronoi.json',
     };
 
     this.init();

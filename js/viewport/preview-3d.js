@@ -101,6 +101,22 @@ export class Preview3D {
     this.scene.add(this.currentMesh);
   }
 
+  cleanShaderForThreeJS(shaderStr) {
+    if (!shaderStr) return '';
+    let s = shaderStr;
+    // Strip #version directives because Three.js ShaderMaterial prepends its own GLSL header
+    s = s.replace(/^\s*#version\s+.*$/gm, '');
+    // Strip standalone GLSL 300 precision declarations if redundantly included
+    s = s.replace(/^\s*precision\s+(highp|mediump|lowp)\s+float\s*;/gm, '');
+    // Convert GLSL 300 fragColor output variable to standard gl_FragColor
+    s = s.replace(/^\s*out\s+vec4\s+fragColor\s*;/gm, '');
+    s = s.replace(/\bfragColor\b/g, 'gl_FragColor');
+    // Convert GLSL 300 in/out varying declarations to standard GLSL 100 varyings
+    s = s.replace(/^\s*in\s+(vec[234]|float)\s+(v_\w+)\s*;/gm, 'varying $1 $2;');
+    s = s.replace(/^\s*out\s+(vec[234]|float)\s+(v_\w+)\s*;/gm, 'varying $1 $2;');
+    return s;
+  }
+
   updateShaderMaterial(vertexShader, fragmentShader, properties = []) {
     // Construct Uniforms from Graph Properties
     const uniforms = {
@@ -123,10 +139,13 @@ export class Preview3D {
 
     this.materialUniforms = uniforms;
 
+    const cleanVS = this.cleanShaderForThreeJS(vertexShader);
+    const cleanFS = this.cleanShaderForThreeJS(fragmentShader);
+
     try {
       const shaderMat = new THREE.ShaderMaterial({
-        vertexShader,
-        fragmentShader,
+        vertexShader: cleanVS,
+        fragmentShader: cleanFS,
         uniforms: this.materialUniforms,
         transparent: true,
         side: THREE.DoubleSide

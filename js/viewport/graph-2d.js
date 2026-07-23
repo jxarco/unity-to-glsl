@@ -178,6 +178,7 @@ export class Graph2DView {
     if (t.includes('noise') || t.includes('fresnel') || t.includes('voronoi') || t.includes('checkerboard')) return 'procedural';
     if (t.includes('add') || t.includes('subtract') || t.includes('multiply') || t.includes('divide') ||
         t.includes('step') || t.includes('lerp') || t.includes('clamp') || t.includes('sine') ||
+        t.includes('rotate') || t.includes('split') || t.includes('combine') ||
         t.includes('power') || t.includes('oneminus') || t.includes('smoothstep') ||
         t.includes('dot') || t.includes('cross') || t.includes('normalize') || t.includes('distance')) return 'math';
     return 'default';
