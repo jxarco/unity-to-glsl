@@ -13,6 +13,7 @@ export class PresetLoaderUI {
       'linear-gradient': './js/presets/linear-gradient.json',
       'pbr-rimlight': './js/presets/pbr-rimlight.json',
       'voronoi': './js/presets/voronoi.json',
+      'parallax-mapping': './js/presets/parallax-mapping.json',
     };
 
     this.init();

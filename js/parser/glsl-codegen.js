@@ -192,6 +192,18 @@ float voronoiNoise(vec2 UV, float angleOffset, float cellDensity) {
     return sqrt(minDist);
 }
 
+vec2 parallaxMapping(sampler2D heightMap, vec2 uv, vec3 viewDir, float amplitude) {
+    float height = texture2D(heightMap, uv).r;
+    vec2 p = viewDir.xy * (height * amplitude);
+    return uv - p;
+}
+
+vec2 proceduralParallaxMapping(vec2 uv, vec3 viewDir, float amplitude) {
+    float height = voronoiNoise(uv, 0.0, 6.0);
+    vec2 p = viewDir.xy * (height * amplitude);
+    return uv - p;
+}
+
 void main() {
     // Standard Unity ShaderGraph converted variables
     vec4 UV = vec4(v_uv, 0.0, 0.0);
@@ -324,6 +336,18 @@ float voronoiNoise(vec2 UV, float angleOffset, float cellDensity) {
     return sqrt(minDist);
 }
 
+vec2 parallaxMapping(sampler2D heightMap, vec2 uv, vec3 viewDir, float amplitude) {
+    float height = texture2D(heightMap, uv).r;
+    vec2 p = viewDir.xy * (height * amplitude);
+    return uv - p;
+}
+
+vec2 proceduralParallaxMapping(vec2 uv, vec3 viewDir, float amplitude) {
+    float height = voronoiNoise(uv, 0.0, 6.0);
+    vec2 p = viewDir.xy * (height * amplitude);
+    return uv - p;
+}
+
 void main() {
     vec4 UV = vec4(v_uv, 0.0, 0.0);
     float Time = u_time;
@@ -426,6 +450,33 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         varMap.set(`${node.id}_out`, outVar);
         varMap.set(`${node.id}_3`, outVar);
         varMap.set(`${node.id}_Cells`, outVar);
+        break;
+      }
+
+      case 'ParallaxMappingNode':
+      case 'ParallaxMapping':
+      case 'ParallaxOcclusionMappingNode':
+      case 'ParallaxOcclusionMapping': {
+        const uvVal = getSlotVal('UV', 'UV.xy');
+        const ampVal = getSlotVal('Amplitude', '0.05');
+        const viewVal = getSlotVal('ViewDir', 'ViewDir');
+        const heightMapVal = getSlotVal('Heightmap', '');
+
+        const castUV = this.castTo(uvVal, this.inferType(uvVal), 'vec2');
+        const castAmp = this.castTo(ampVal, this.inferType(ampVal), 'float');
+        const castView = this.castTo(viewVal, this.inferType(viewVal), 'vec3');
+
+        if (heightMapVal && this.typeMap.get(heightMapVal) === 'sampler2D') {
+          codeBody.push(`vec2 ${outVar} = parallaxMapping(${heightMapVal}, ${castUV}, ${castView}, ${castAmp});`);
+        } else {
+          codeBody.push(`vec2 ${outVar} = proceduralParallaxMapping(${castUV}, ${castView}, ${castAmp});`);
+        }
+
+        this.typeMap.set(outVar, 'vec2');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_ParallaxUV`, outVar);
+        varMap.set(`${node.id}_4`, outVar);
         break;
       }
 

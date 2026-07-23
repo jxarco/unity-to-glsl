@@ -175,7 +175,7 @@ export class Graph2DView {
     if (t.includes('target') || t.includes('master')) return 'target';
     if (t.includes('property') || t.includes('color') && !t.includes('multiply')) return 'property';
     if (t.includes('time') || t.includes('uv') || t.includes('position') || t.includes('normal') || t.includes('viewdir')) return 'input';
-    if (t.includes('noise') || t.includes('fresnel') || t.includes('voronoi') || t.includes('checkerboard')) return 'procedural';
+    if (t.includes('noise') || t.includes('fresnel') || t.includes('voronoi') || t.includes('parallax') || t.includes('checkerboard')) return 'procedural';
     if (t.includes('add') || t.includes('subtract') || t.includes('multiply') || t.includes('divide') ||
         t.includes('step') || t.includes('lerp') || t.includes('clamp') || t.includes('sine') ||
         t.includes('rotate') || t.includes('split') || t.includes('combine') ||
