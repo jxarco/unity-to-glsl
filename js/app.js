@@ -129,6 +129,48 @@ class Application {
         updateLayouts();
       });
     }
+
+    // Setup resizable right panel
+    this.setupResizeHandle(mainContent);
+  }
+
+  setupResizeHandle(mainContent) {
+    const handle = document.getElementById('panel-resize-handle');
+    if (!handle || !mainContent) return;
+
+    const MIN_WIDTH = 280;
+    const MAX_WIDTH = 800;
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 480;
+
+    handle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--right-panel-width')) || 480;
+      handle.classList.add('active');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      const delta = startX - e.clientX;
+      const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth + delta));
+      document.documentElement.style.setProperty('--right-panel-width', newWidth + 'px');
+
+      if (this.preview3D) this.preview3D.onWindowResize();
+      if (this.codeEditor) this.codeEditor.layout();
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!isResizing) return;
+      isResizing = false;
+      handle.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
   }
 
   setupViewportTabs() {
@@ -206,7 +248,7 @@ class Application {
           });
 
           wrapper.appendChild(input);
-          wrapper.appendChild(document.createTextNode(' Base Color'));
+          wrapper.appendChild(document.createTextNode(` ${prop.name}`));
           group.appendChild(wrapper);
         } else if (prop.type === 'Vector1') {
           const input = document.createElement('input');

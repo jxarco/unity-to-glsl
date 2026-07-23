@@ -155,6 +155,10 @@ export class Preview3D {
       } else if (typeof this.materialUniforms[name].value === 'number') {
         this.materialUniforms[name].value = parseFloat(value);
       }
+      // Ensure material knows uniforms changed
+      if (this.currentMaterial) {
+        this.currentMaterial.uniformsNeedUpdate = true;
+      }
     }
   }
 

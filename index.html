@@ -9,7 +9,7 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Google+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- Monaco Editor Loader script -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
@@ -138,8 +138,15 @@
       </section>
 
       <!-- Right Panel: Monaco GLSL Shader Code Editor -->
-      <aside id="right-panel" class="panel panel-right">
+      <aside id="right-panel" class="panel panel-right" style="position:relative;">
+        <div id="panel-resize-handle" class="panel-resize-handle"></div>
         <div class="panel-header">
+          <button id="btn-toggle-right-panel" class="panel-toggle-btn" title="Collapse Right Sidebar">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+
           <span class="panel-title">
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
@@ -168,12 +175,6 @@
               Download
             </button>
           </div>
-
-          <button id="btn-toggle-right-panel" class="panel-toggle-btn" title="Collapse Right Sidebar">
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-            </svg>
-          </button>
         </div>
 
         <div class="panel-body" style="padding:0; position:relative; overflow:hidden;">
