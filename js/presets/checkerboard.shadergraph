@@ -1,0 +1,55 @@
+{
+  "m_SGVersion": 3,
+  "m_Type": "UnityEditor.ShaderGraph.GraphData",
+  "m_ObjectId": "2001",
+  "m_Properties": [
+    {
+      "m_Name": "Color A",
+      "m_DefaultValue": { "r": 0.05, "g": 0.05, "b": 0.08, "a": 1.0 },
+      "m_Type": "Color",
+      "m_ReferenceName": "_ColorA"
+    },
+    {
+      "m_Name": "Color B",
+      "m_DefaultValue": { "r": 0.9, "g": 0.95, "b": 1.0, "a": 1.0 },
+      "m_Type": "Color",
+      "m_ReferenceName": "_ColorB"
+    },
+    {
+      "m_Name": "Frequency",
+      "m_DefaultValue": 12.0,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_Frequency"
+    }
+  ],
+  "m_Nodes": [
+    {
+      "m_ObjectId": "node_uv",
+      "m_Type": "UnityEditor.ShaderGraph.UVNode",
+      "m_Name": "UV"
+    },
+    {
+      "m_ObjectId": "node_checker",
+      "m_Type": "UnityEditor.ShaderGraph.CheckerboardNode",
+      "m_Name": "Checkerboard"
+    },
+    {
+      "m_ObjectId": "node_lerp",
+      "m_Type": "UnityEditor.ShaderGraph.LerpNode",
+      "m_Name": "Lerp"
+    },
+    {
+      "m_ObjectId": "node_target_unlit",
+      "m_Type": "UnityEditor.ShaderGraph.UniversalTarget",
+      "m_Name": "Universal Unlit Target"
+    }
+  ],
+  "m_Edges": [
+    { "fromNode": "node_uv", "fromSlot": "Out", "toNode": "node_checker", "toSlot": "UV" },
+    { "fromNode": "prop_Frequency", "fromSlot": "Out", "toNode": "node_checker", "toSlot": "Frequency" },
+    { "fromNode": "prop_ColorA", "fromSlot": "Out", "toNode": "node_lerp", "toSlot": "A" },
+    { "fromNode": "prop_ColorB", "fromSlot": "Out", "toNode": "node_lerp", "toSlot": "B" },
+    { "fromNode": "node_checker", "fromSlot": "Out", "toNode": "node_lerp", "toSlot": "T" },
+    { "fromNode": "node_lerp", "fromSlot": "Out", "toNode": "node_target_unlit", "toSlot": "BaseColor" }
+  ]
+}

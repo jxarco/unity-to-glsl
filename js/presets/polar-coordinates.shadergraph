@@ -1,0 +1,54 @@
+{
+  "m_SGVersion": 3,
+  "m_Type": "UnityEditor.ShaderGraph.GraphData",
+  "m_ObjectId": "2003",
+  "m_Properties": [
+    {
+      "m_Name": "RadialScale",
+      "m_DefaultValue": 2.0,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_RadialScale"
+    },
+    {
+      "m_Name": "LengthScale",
+      "m_DefaultValue": 5.0,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_LengthScale"
+    },
+    {
+      "m_Name": "SwirlSpeed",
+      "m_DefaultValue": 1.5,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_SwirlSpeed"
+    }
+  ],
+  "m_Nodes": [
+    {
+      "m_ObjectId": "node_uv",
+      "m_Type": "UnityEditor.ShaderGraph.UVNode",
+      "m_Name": "UV"
+    },
+    {
+      "m_ObjectId": "node_polar",
+      "m_Type": "UnityEditor.ShaderGraph.PolarCoordinatesNode",
+      "m_Name": "Polar Coordinates"
+    },
+    {
+      "m_ObjectId": "node_noise",
+      "m_Type": "UnityEditor.ShaderGraph.GradientNoiseNode",
+      "m_Name": "Gradient Noise"
+    },
+    {
+      "m_ObjectId": "node_target_unlit",
+      "m_Type": "UnityEditor.ShaderGraph.UniversalTarget",
+      "m_Name": "Universal Unlit Target"
+    }
+  ],
+  "m_Edges": [
+    { "fromNode": "node_uv", "fromSlot": "Out", "toNode": "node_polar", "toSlot": "UV" },
+    { "fromNode": "prop_RadialScale", "fromSlot": "Out", "toNode": "node_polar", "toSlot": "RadialScale" },
+    { "fromNode": "prop_LengthScale", "fromSlot": "Out", "toNode": "node_polar", "toSlot": "LengthScale" },
+    { "fromNode": "node_polar", "fromSlot": "Out", "toNode": "node_noise", "toSlot": "UV" },
+    { "fromNode": "node_noise", "fromSlot": "Out", "toNode": "node_target_unlit", "toSlot": "BaseColor" }
+  ]
+}

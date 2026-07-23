@@ -1,0 +1,66 @@
+{
+  "m_SGVersion": 3,
+  "m_Type": "UnityEditor.ShaderGraph.GraphData",
+  "m_ObjectId": "2002",
+  "m_Properties": [
+    {
+      "m_Name": "Tiling",
+      "m_DefaultValue": 4.0,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_Tiling"
+    },
+    {
+      "m_Name": "Speed X",
+      "m_DefaultValue": 0.2,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_SpeedX"
+    },
+    {
+      "m_Name": "Speed Y",
+      "m_DefaultValue": 0.5,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_SpeedY"
+    }
+  ],
+  "m_Nodes": [
+    {
+      "m_ObjectId": "node_uv",
+      "m_Type": "UnityEditor.ShaderGraph.UVNode",
+      "m_Name": "UV"
+    },
+    {
+      "m_ObjectId": "node_time",
+      "m_Type": "UnityEditor.ShaderGraph.TimeNode",
+      "m_Name": "Time"
+    },
+    {
+      "m_ObjectId": "node_mul_time",
+      "m_Type": "UnityEditor.ShaderGraph.MultiplyNode",
+      "m_Name": "Multiply Offset Speed"
+    },
+    {
+      "m_ObjectId": "node_tiling_offset",
+      "m_Type": "UnityEditor.ShaderGraph.TilingAndOffsetNode",
+      "m_Name": "Tiling and Offset"
+    },
+    {
+      "m_ObjectId": "node_voronoi",
+      "m_Type": "UnityEditor.ShaderGraph.VoronoiNode",
+      "m_Name": "Voronoi Noise"
+    },
+    {
+      "m_ObjectId": "node_target_unlit",
+      "m_Type": "UnityEditor.ShaderGraph.UniversalTarget",
+      "m_Name": "Universal Unlit Target"
+    }
+  ],
+  "m_Edges": [
+    { "fromNode": "node_uv", "fromSlot": "Out", "toNode": "node_tiling_offset", "toSlot": "UV" },
+    { "fromNode": "prop_Tiling", "fromSlot": "Out", "toNode": "node_tiling_offset", "toSlot": "Tiling" },
+    { "fromNode": "node_time", "fromSlot": "Time", "toNode": "node_mul_time", "toSlot": "A" },
+    { "fromNode": "prop_SpeedX", "fromSlot": "Out", "toNode": "node_mul_time", "toSlot": "B" },
+    { "fromNode": "node_mul_time", "fromSlot": "Out", "toNode": "node_tiling_offset", "toSlot": "Offset" },
+    { "fromNode": "node_tiling_offset", "fromSlot": "Out", "toNode": "node_voronoi", "toSlot": "UV" },
+    { "fromNode": "node_voronoi", "fromSlot": "Out", "toNode": "node_target_unlit", "toSlot": "BaseColor" }
+  ]
+}

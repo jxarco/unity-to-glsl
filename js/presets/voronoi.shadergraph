@@ -1,0 +1,114 @@
+{
+    "m_SerializedProperties": [
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.ColorShaderProperty"
+            },
+            "JSONnodeData": "{\n    \"m_Value\": {\n        \"r\": 0.461, \n        \"g\": 1.0,\n        \"b\": 0.259,\n        \"a\": 1.0\n    },\n    \"m_Name\": \"Color A\",\n    \"m_GeneratePropertyBlock\": true,\n    \"m_Guid\": {\n        \"m_GuidSerialized\": \"cf558591-00a5-4855-a784-38389e612ea3\"\n    },\n    \"m_OverrideReferenceName\": \"_ColorA\",\n    \"m_ColorMode\": 0\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.ColorShaderProperty"
+            },
+            "JSONnodeData": "{\n    \"m_Value\": {\n        \"r\": 0.137,\n        \"g\": 0.5,\n        \"b\": 0.0,\n        \"a\": 1.0\n    },\n    \"m_Name\": \"Color B\",\n    \"m_GeneratePropertyBlock\": true,\n    \"m_Guid\": {\n        \"m_GuidSerialized\": \"c90279cf-e197-47b5-946b-ab1322efd59d\"\n    },\n    \"m_OverrideReferenceName\": \"_ColorB\",\n    \"m_ColorMode\": 0\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.Vector1ShaderProperty"
+            },
+            "JSONnodeData": "{\n    \"m_Value\": 2.0,\n    \"m_Name\": \"Angle Offset\",\n    \"m_GeneratePropertyBlock\": true,\n    \"m_Guid\": {\n        \"m_GuidSerialized\": \"7c0005bd-3479-447b-bf0e-83e02db6b3ab\"\n    },\n    \"m_OverrideReferenceName\": \"_AngleOffset\",\n    \"m_FloatType\": 0\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.Vector1ShaderProperty"
+            },
+            "JSONnodeData": "{\n    \"m_Value\": 5.0,\n    \"m_Name\": \"Cell Density\",\n    \"m_GeneratePropertyBlock\": true,\n    \"m_Guid\": {\n        \"m_GuidSerialized\": \"2440d212-61f4-4c26-992c-f6cece27624c\"\n    },\n    \"m_OverrideReferenceName\": \"_CellDensity\",\n    \"m_FloatType\": 0\n}"
+        }
+    ],
+    "m_GUID": {
+        "m_GuidSerialized": "6e375166-ab17-4884-9cc2-58c371ff5e76"
+    },
+    "m_SerializableNodes": [
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.PropertyNode"
+            },
+            "JSONnodeData": "{\n    \"m_GuidSerialized\": \"48221663-51c2-4615-98e3-ebea35c863e0\",\n    \"m_Name\": \"Property\",\n    \"m_PropertyGuidSerialized\": \"2440d212-61f4-4c26-992c-f6cece27624c\"\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.PropertyNode"
+            },
+            "JSONnodeData": "{\n    \"m_GuidSerialized\": \"179222fd-dace-4079-ad87-cf7dc43e24cf\",\n    \"m_Name\": \"Property\",\n    \"m_PropertyGuidSerialized\": \"7c0005bd-3479-447b-bf0e-83e02db6b3ab\"\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.PropertyNode"
+            },
+            "JSONnodeData": "{\n    \"m_GuidSerialized\": \"63c91af7-e2e7-4c37-88b4-b9072924aed8\",\n    \"m_Name\": \"Property\",\n    \"m_PropertyGuidSerialized\": \"c90279cf-e197-47b5-946b-ab1322efd59d\"\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.PropertyNode"
+            },
+            "JSONnodeData": "{\n    \"m_GuidSerialized\": \"23ef1cbf-e763-462a-ab5f-8a7e94ac5867\",\n    \"m_Name\": \"Property\",\n    \"m_PropertyGuidSerialized\": \"cf558591-00a5-4855-a784-38389e612ea3\"\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.LerpNode"
+            },
+            "JSONnodeData": "{\n    \"m_GuidSerialized\": \"4fcfb043-519d-45e7-83e9-c07770fedb8b\",\n    \"m_Name\": \"Lerp\"\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.VoronoiNode"
+            },
+            "JSONnodeData": "{\n    \"m_GuidSerialized\": \"d072c0c0-a70d-4ab6-b53a-225e380620d7\",\n    \"m_Name\": \"Voronoi\"\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.ShaderGraph.UnlitMasterNode"
+            },
+            "JSONnodeData": "{\n    \"m_GuidSerialized\": \"83135080-e139-4372-90a1-dbedcc0a0b71\",\n    \"m_Name\": \"Unlit Master\"\n}"
+        }
+    ],
+    "m_SerializableEdges": [
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.Graphing.Edge"
+            },
+            "JSONnodeData": "{\n    \"m_OutputSlot\": { \"m_SlotId\": 0, \"m_NodeGUIDSerialized\": \"23ef1cbf-e763-462a-ab5f-8a7e94ac5867\" },\n    \"m_InputSlot\": { \"m_SlotId\": 0, \"m_NodeGUIDSerialized\": \"4fcfb043-519d-45e7-83e9-c07770fedb8b\" }\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.Graphing.Edge"
+            },
+            "JSONnodeData": "{\n    \"m_OutputSlot\": { \"m_SlotId\": 0, \"m_NodeGUIDSerialized\": \"63c91af7-e2e7-4c37-88b4-b9072924aed8\" },\n    \"m_InputSlot\": { \"m_SlotId\": 1, \"m_NodeGUIDSerialized\": \"4fcfb043-519d-45e7-83e9-c07770fedb8b\" }\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.Graphing.Edge"
+            },
+            "JSONnodeData": "{\n    \"m_OutputSlot\": { \"m_SlotId\": 3, \"m_NodeGUIDSerialized\": \"d072c0c0-a70d-4ab6-b53a-225e380620d7\" },\n    \"m_InputSlot\": { \"m_SlotId\": 2, \"m_NodeGUIDSerialized\": \"4fcfb043-519d-45e7-83e9-c07770fedb8b\" }\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.Graphing.Edge"
+            },
+            "JSONnodeData": "{\n    \"m_OutputSlot\": { \"m_SlotId\": 3, \"m_NodeGUIDSerialized\": \"4fcfb043-519d-45e7-83e9-c07770fedb8b\" },\n    \"m_InputSlot\": { \"m_SlotId\": 0, \"m_NodeGUIDSerialized\": \"83135080-e139-4372-90a1-dbedcc0a0b71\" }\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.Graphing.Edge"
+            },
+            "JSONnodeData": "{\n    \"m_OutputSlot\": { \"m_SlotId\": 0, \"m_NodeGUIDSerialized\": \"179222fd-dace-4079-ad87-cf7dc43e24cf\" },\n    \"m_InputSlot\": { \"m_SlotId\": 1, \"m_NodeGUIDSerialized\": \"d072c0c0-a70d-4ab6-b53a-225e380620d7\" }\n}"
+        },
+        {
+            "typeInfo": {
+                "fullName": "UnityEditor.Graphing.Edge"
+            },
+            "JSONnodeData": "{\n    \"m_OutputSlot\": { \"m_SlotId\": 0, \"m_NodeGUIDSerialized\": \"48221663-51c2-4615-98e3-ebea35c863e0\" },\n    \"m_InputSlot\": { \"m_SlotId\": 2, \"m_NodeGUIDSerialized\": \"d072c0c0-a70d-4ab6-b53a-225e380620d7\" }\n}"
+        }
+    ],
+    "m_Path": "Graphs/Procedural/Noise"
+}

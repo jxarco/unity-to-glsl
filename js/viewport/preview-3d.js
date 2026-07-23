@@ -134,6 +134,8 @@ export class Preview3D {
       } else if (prop.type === 'Vector1') {
         const val = typeof prop.defaultValue === 'number' ? prop.defaultValue : 0.5;
         uniforms[prop.referenceName] = { value: val };
+      } else if (prop.type === 'Texture2D') {
+        uniforms[prop.referenceName] = { value: this.createDummyTexture() };
       }
     });
 
@@ -160,6 +162,36 @@ export class Preview3D {
       console.error('Shader compilation error:', err);
       return { success: false, error: err.message };
     }
+  }
+
+  createDummyTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillRect(128, 128, 128, 128);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    return texture;
+  }
+
+  updateTextureUniform(name, imageSrc) {
+    const loader = new THREE.TextureLoader();
+    loader.load(imageSrc, (tex) => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      if (this.materialUniforms[name]) {
+        this.materialUniforms[name].value = tex;
+        if (this.currentMaterial) {
+          this.currentMaterial.uniformsNeedUpdate = true;
+        }
+      }
+    });
   }
 
   updateUniformValue(name, value) {

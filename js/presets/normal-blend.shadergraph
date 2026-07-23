@@ -1,0 +1,41 @@
+{
+  "m_SGVersion": 3,
+  "m_Type": "UnityEditor.ShaderGraph.GraphData",
+  "m_ObjectId": "2005",
+  "m_Properties": [
+    {
+      "m_Name": "BaseColor",
+      "m_DefaultValue": { "r": 0.1, "g": 0.5, "b": 0.9, "a": 1.0 },
+      "m_Type": "Color",
+      "m_ReferenceName": "_BaseColor"
+    },
+    {
+      "m_Name": "Normal Strength",
+      "m_DefaultValue": 2.5,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_NormalStrength"
+    }
+  ],
+  "m_Nodes": [
+    {
+      "m_ObjectId": "node_voronoi",
+      "m_Type": "UnityEditor.ShaderGraph.VoronoiNode",
+      "m_Name": "Voronoi Detail"
+    },
+    {
+      "m_ObjectId": "node_norm_str",
+      "m_Type": "UnityEditor.ShaderGraph.NormalStrengthNode",
+      "m_Name": "Normal Strength"
+    },
+    {
+      "m_ObjectId": "node_target_lit",
+      "m_Type": "UnityEditor.ShaderGraph.UniversalTarget",
+      "m_Name": "Universal Lit Target"
+    }
+  ],
+  "m_Edges": [
+    { "fromNode": "prop_NormalStrength", "fromSlot": "Out", "toNode": "node_norm_str", "toSlot": "Strength" },
+    { "fromNode": "prop_BaseColor", "fromSlot": "Out", "toNode": "node_target_lit", "toSlot": "BaseColor" },
+    { "fromNode": "node_norm_str", "fromSlot": "Out", "toNode": "node_target_lit", "toSlot": "Normal" }
+  ]
+}

@@ -321,6 +321,44 @@ class Application {
 
           label.appendChild(numInput);
           group.appendChild(input);
+        } else if (prop.type === 'Texture2D') {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'texture-picker-wrapper';
+          wrapper.style.display = 'flex';
+          wrapper.style.flexDirection = 'column';
+          wrapper.style.gap = '6px';
+          wrapper.style.marginTop = '4px';
+
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = 'image/*';
+          fileInput.style.display = 'none';
+
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-secondary btn-sm';
+          btn.style.width = '100%';
+          btn.style.justifyContent = 'center';
+          btn.style.fontSize = '11px';
+          btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg> Choose Image (${prop.name})...`;
+
+          btn.addEventListener('click', () => fileInput.click());
+
+          fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (evt) => {
+                const dataUrl = evt.target.result;
+                this.preview3D.updateTextureUniform(prop.referenceName, dataUrl);
+                btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ${file.name}`;
+              };
+              reader.readAsDataURL(file);
+            }
+          });
+
+          wrapper.appendChild(btn);
+          wrapper.appendChild(fileInput);
+          group.appendChild(wrapper);
         }
 
         propContainer.appendChild(group);

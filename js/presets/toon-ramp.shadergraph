@@ -1,0 +1,55 @@
+{
+  "m_SGVersion": 3,
+  "m_Type": "UnityEditor.ShaderGraph.GraphData",
+  "m_ObjectId": "2004",
+  "m_Properties": [
+    {
+      "m_Name": "ToonColor",
+      "m_DefaultValue": { "r": 0.2, "g": 0.85, "b": 0.4, "a": 1.0 },
+      "m_Type": "Color",
+      "m_ReferenceName": "_ToonColor"
+    },
+    {
+      "m_Name": "ShadowColor",
+      "m_DefaultValue": { "r": 0.05, "g": 0.15, "b": 0.25, "a": 1.0 },
+      "m_Type": "Color",
+      "m_ReferenceName": "_ShadowColor"
+    },
+    {
+      "m_Name": "Threshold",
+      "m_DefaultValue": 0.4,
+      "m_Type": "Vector1",
+      "m_ReferenceName": "_Threshold"
+    }
+  ],
+  "m_Nodes": [
+    {
+      "m_ObjectId": "node_fresnel",
+      "m_Type": "UnityEditor.ShaderGraph.FresnelNode",
+      "m_Name": "Fresnel Light"
+    },
+    {
+      "m_ObjectId": "node_step",
+      "m_Type": "UnityEditor.ShaderGraph.StepNode",
+      "m_Name": "Step Cel Ramp"
+    },
+    {
+      "m_ObjectId": "node_lerp",
+      "m_Type": "UnityEditor.ShaderGraph.LerpNode",
+      "m_Name": "Lerp Toon Color"
+    },
+    {
+      "m_ObjectId": "node_target_lit",
+      "m_Type": "UnityEditor.ShaderGraph.UniversalTarget",
+      "m_Name": "Universal Lit Target"
+    }
+  ],
+  "m_Edges": [
+    { "fromNode": "prop_Threshold", "fromSlot": "Out", "toNode": "node_step", "toSlot": "Edge" },
+    { "fromNode": "node_fresnel", "fromSlot": "Out", "toNode": "node_step", "toSlot": "In" },
+    { "fromNode": "prop_ShadowColor", "fromSlot": "Out", "toNode": "node_lerp", "toSlot": "A" },
+    { "fromNode": "prop_ToonColor", "fromSlot": "Out", "toNode": "node_lerp", "toSlot": "B" },
+    { "fromNode": "node_step", "fromSlot": "Out", "toNode": "node_lerp", "toSlot": "T" },
+    { "fromNode": "node_lerp", "fromSlot": "Out", "toNode": "node_target_lit", "toSlot": "BaseColor" }
+  ]
+}
