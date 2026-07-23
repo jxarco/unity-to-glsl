@@ -1,18 +1,84 @@
 /**
- * GLSL Code Viewer & Syntax Highlighter Component
+ * Monaco GLSL Code Editor & Live Code Transpilation Component
  */
 
 export class CodeEditorUI {
-  constructor(containerId) {
+  constructor(containerId, onCodeEdited) {
+    this.containerId = containerId;
     this.container = document.getElementById(containerId);
+    this.onCodeEdited = onCodeEdited;
+    this.editor = null;
     this.currentOutput = null;
     this.activeTab = 'fragment'; // 'vertex' | 'fragment' | 'full'
+    this.isEditable = false;
+    this.isInternalUpdate = false;
+    this.monacoReady = false;
 
-    this.init();
+    this.bindUIEvents();
+    this.waitForMonaco();
   }
 
-  init() {
-    // Bind Tab click events if tab elements exist
+  waitForMonaco() {
+    // Poll for window.require (AMD loader) to be available, then load Monaco
+    const check = () => {
+      if (typeof window.require === 'function') {
+        this.loadMonaco();
+      } else {
+        setTimeout(check, 100);
+      }
+    };
+    check();
+  }
+
+  loadMonaco() {
+    window.require.config({
+      paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }
+    });
+
+    window.require(['vs/editor/editor.main'], () => {
+      this.monacoReady = true;
+      this.createEditor();
+    });
+  }
+
+  createEditor() {
+    if (!this.container || !window.monaco) return;
+
+    this.editor = window.monaco.editor.create(this.container, {
+      value: '// Loading GLSL shader code...',
+      language: 'cpp',
+      theme: 'vs-dark',
+      readOnly: true,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      fontSize: 13,
+      fontFamily: "'Fira Code', Consolas, monospace",
+      fontLigatures: true,
+      automaticLayout: true,
+      padding: { top: 12, bottom: 12 },
+      lineNumbers: 'on',
+      renderLineHighlight: 'all',
+      matchBrackets: 'always',
+      wordWrap: 'off'
+    });
+
+    // Listen for user edits
+    this.editor.onDidChangeModelContent(() => {
+      if (this.isInternalUpdate) return;
+      if (this.isEditable && this.onCodeEdited) {
+        const currentContent = this.editor.getValue();
+        this.onCodeEdited(currentContent, this.activeTab);
+      }
+    });
+
+    // Render buffered content if available
+    if (this.currentOutput) {
+      this.render();
+    }
+  }
+
+  bindUIEvents() {
+    // 1. Bind Tab Buttons
     const tabs = document.querySelectorAll('.code-tab');
     tabs.forEach(tab => {
       tab.addEventListener('click', (e) => {
@@ -23,13 +89,24 @@ export class CodeEditorUI {
       });
     });
 
-    // Bind Copy Button
+    // 2. Bind Editable Toggle Switch
+    const toggleEditable = document.getElementById('toggle-editable');
+    if (toggleEditable) {
+      toggleEditable.addEventListener('change', (e) => {
+        this.isEditable = e.target.checked;
+        if (this.editor) {
+          this.editor.updateOptions({ readOnly: !this.isEditable });
+        }
+      });
+    }
+
+    // 3. Bind Copy Button
     const copyBtn = document.getElementById('btn-copy-code');
     if (copyBtn) {
       copyBtn.addEventListener('click', () => this.copyToClipboard());
     }
 
-    // Bind Download Button
+    // 4. Bind Download Button
     const downloadBtn = document.getElementById('btn-download-glsl');
     if (downloadBtn) {
       downloadBtn.addEventListener('click', () => this.downloadGLSL());
@@ -42,7 +119,7 @@ export class CodeEditorUI {
   }
 
   render() {
-    if (!this.container || !this.currentOutput) return;
+    if (!this.currentOutput) return;
 
     let codeToShow = '';
     if (this.activeTab === 'vertex') {
@@ -53,26 +130,22 @@ export class CodeEditorUI {
       codeToShow = this.currentOutput.fragmentShader;
     }
 
-    const highlightedHTML = this.highlightGLSL(codeToShow);
-    this.container.innerHTML = `<pre><code>${highlightedHTML}</code></pre>`;
+    if (this.editor) {
+      this.isInternalUpdate = true;
+      this.editor.setValue(codeToShow);
+      this.isInternalUpdate = false;
+    }
   }
 
-  highlightGLSL(code) {
-    // Basic regex token highlighter for GLSL ES 3.0
-    return code
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/(\/\/.*)/g, '<span class="token-comment">$1</span>')
-      .replace(/\b(uniform|in|out|precision|highp|mediump|lowp|void|main|return|if|else|for|while)\b/g, '<span class="token-keyword">$1</span>')
-      .replace(/\b(float|int|vec2|vec3|vec4|mat3|mat4|sampler2D|bool)\b/g, '<span class="token-type">$1</span>')
-      .replace(/\b(sin|cos|tan|step|smoothstep|mix|pow|clamp|normalize|dot|cross|length|distance|gradientNoise|fresnelEffect|fract|floor)\b/g, '<span class="token-builtin">$1</span>')
-      .replace(/\b([0-9]+\.[0-9]*|[0-9]*\.[0-9]+|[0-9]+)\b/g, '<span class="token-number">$1</span>');
+  layout() {
+    if (this.editor) {
+      this.editor.layout();
+    }
   }
 
   copyToClipboard() {
-    if (!this.currentOutput) return;
-    const textToCopy = this.activeTab === 'vertex' ? this.currentOutput.vertexShader :
-                       this.activeTab === 'full' ? this.currentOutput.fullGLSL :
-                       this.currentOutput.fragmentShader;
+    const textToCopy = this.editor ? this.editor.getValue() : '';
+    if (!textToCopy) return;
 
     navigator.clipboard.writeText(textToCopy).then(() => {
       const copyBtn = document.getElementById('btn-copy-code');
@@ -85,13 +158,14 @@ export class CodeEditorUI {
   }
 
   downloadGLSL() {
-    if (!this.currentOutput) return;
-    const textToDownload = this.currentOutput.fullGLSL;
+    const textToDownload = this.editor ? this.editor.getValue() : '';
+    if (!textToDownload) return;
+
     const blob = new Blob([textToDownload], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'converted_shader.glsl';
+    a.download = `shader_${this.activeTab}.glsl`;
     a.click();
     URL.revokeObjectURL(url);
   }

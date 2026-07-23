@@ -19,6 +19,7 @@ class Application {
     this.presetLoader = null;
 
     this.currentParsedGraph = null;
+    this.currentGlslOutput = null;
 
     this.init();
   }
@@ -27,7 +28,11 @@ class Application {
     // 1. Initialize Viewports & UI
     this.preview3D = new Preview3D('canvas-3d-container');
     this.graph2D = new Graph2DView('graph-2d-container');
-    this.codeEditor = new CodeEditorUI('code-viewport');
+    
+    // Initialize Monaco Editor with live edit listener
+    this.codeEditor = new CodeEditorUI('monaco-editor-container', (editedCode, activeTab) => {
+      this.handleLiveCodeEdit(editedCode, activeTab);
+    });
 
     // 2. Initialize Preset Loader
     this.presetLoader = new PresetLoaderUI('preset-select', (presetJson, key) => {
@@ -36,6 +41,7 @@ class Application {
 
     // 3. Setup UI Event Listeners
     this.setupViewportTabs();
+    this.setupSidebarToggles();
     this.setupGeometrySelector();
     this.setupDragAndDrop();
     this.setupModal();
@@ -50,26 +56,78 @@ class Application {
       this.currentParsedGraph = this.parser.parse(jsonInput);
 
       // Transpile to GLSL
-      const glslOutput = this.generator.transpile(this.currentParsedGraph);
+      this.currentGlslOutput = this.generator.transpile(this.currentParsedGraph);
 
       // Update 3D Shader Viewport
       this.preview3D.updateShaderMaterial(
-        glslOutput.threeVertexShader || glslOutput.vertexShader,
-        glslOutput.threeFragmentShader || glslOutput.fragmentShader,
+        this.currentGlslOutput.threeVertexShader || this.currentGlslOutput.vertexShader,
+        this.currentGlslOutput.threeFragmentShader || this.currentGlslOutput.fragmentShader,
         this.currentParsedGraph.properties
       );
 
       // Update 2D Graph Viewport
       this.graph2D.updateGraph(this.currentParsedGraph);
 
-      // Update Code Editor
-      this.codeEditor.updateCode(glslOutput);
+      // Update Monaco Code Editor
+      this.codeEditor.updateCode(this.currentGlslOutput);
 
       // Render Graph Inspector & Properties Panel
       this.renderGraphInspector();
     } catch (err) {
       console.error('Error compiling ShaderGraph:', err);
       alert('Error parsing Unity 6 ShaderGraph: ' + err.message);
+    }
+  }
+
+  handleLiveCodeEdit(editedCode, activeTab) {
+    if (!this.currentParsedGraph || !this.currentGlslOutput) return;
+
+    let vShader = this.currentGlslOutput.threeVertexShader;
+    let fShader = this.currentGlslOutput.threeFragmentShader;
+
+    if (activeTab === 'fragment') {
+      fShader = editedCode;
+    } else if (activeTab === 'vertex') {
+      vShader = editedCode;
+    }
+
+    this.preview3D.updateShaderMaterial(vShader, fShader, this.currentParsedGraph.properties);
+  }
+
+  setupSidebarToggles() {
+    const mainContent = document.getElementById('main-content');
+    const toggleLeft = document.getElementById('btn-toggle-left-panel');
+    const toggleRight = document.getElementById('btn-toggle-right-panel');
+    const expandLeft = document.getElementById('expand-left-btn');
+    const expandRight = document.getElementById('expand-right-btn');
+
+    const updateLayouts = () => {
+      setTimeout(() => {
+        if (this.preview3D) this.preview3D.onWindowResize();
+        if (this.codeEditor) this.codeEditor.layout();
+      }, 310);
+    };
+
+    if (toggleLeft && expandLeft && mainContent) {
+      toggleLeft.addEventListener('click', () => {
+        mainContent.classList.add('collapsed-left');
+        updateLayouts();
+      });
+      expandLeft.addEventListener('click', () => {
+        mainContent.classList.remove('collapsed-left');
+        updateLayouts();
+      });
+    }
+
+    if (toggleRight && expandRight && mainContent) {
+      toggleRight.addEventListener('click', () => {
+        mainContent.classList.add('collapsed-right');
+        updateLayouts();
+      });
+      expandRight.addEventListener('click', () => {
+        mainContent.classList.remove('collapsed-right');
+        updateLayouts();
+      });
     }
   }
 
@@ -157,7 +215,7 @@ class Application {
           input.min = '0';
           input.max = '2';
           input.step = '0.01';
-          input.value = prop.defaultValue !== undefined ? prop.defaultValue : 0.5;
+          input.value = prop.defaultValue !== undefined ? prop.defaultValue : 0.45;
 
           const valSpan = document.createElement('span');
           valSpan.className = 'prop-value';

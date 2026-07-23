@@ -11,6 +11,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+  <!-- Monaco Editor Loader script -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+
   <!-- Stylesheets -->
   <link rel="stylesheet" href="./css/main.css">
   <link rel="stylesheet" href="./css/components.css">
@@ -44,10 +47,10 @@
     </header>
 
     <!-- Main Split Layout -->
-    <main class="main-content">
+    <main id="main-content" class="main-content">
 
       <!-- Left Panel: Graph Inspector & Properties -->
-      <aside class="panel">
+      <aside id="left-panel" class="panel panel-left">
         <div class="panel-header">
           <span class="panel-title">
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -55,6 +58,11 @@
             </svg>
             Graph Inspector
           </span>
+          <button id="btn-toggle-left-panel" class="panel-toggle-btn" title="Collapse Left Sidebar">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+          </button>
         </div>
         <div class="panel-body">
           <div class="prop-group">
@@ -75,6 +83,18 @@
 
       <!-- Center Panel: Viewport Area (3D Shader Preview / 2D Graph View) -->
       <section class="viewport-panel">
+        <!-- Floating Restore Sidebar Buttons -->
+        <button id="expand-left-btn" class="floating-expand-btn left" title="Open Graph Inspector Sidebar">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <button id="expand-right-btn" class="floating-expand-btn right" title="Open Code Editor Sidebar">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </button>
+
         <!-- Viewport Toolbar Header with Tab Switcher -->
         <div class="viewport-toolbar">
           <div class="viewport-tabs">
@@ -117,17 +137,24 @@
         </div>
       </section>
 
-      <!-- Right Panel: GLSL Shader Code Editor -->
-      <aside class="panel">
+      <!-- Right Panel: Monaco GLSL Shader Code Editor -->
+      <aside id="right-panel" class="panel panel-right">
         <div class="panel-header">
           <span class="panel-title">
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
             </svg>
-            Generated GLSL Code
+            GLSL Code
           </span>
 
           <div class="code-header-actions">
+            <!-- Editable Toggle Switch -->
+            <label class="toggle-switch-label" title="Toggle live GLSL editing mode">
+              <input type="checkbox" id="toggle-editable" class="toggle-switch-input">
+              <span class="toggle-switch-slider"></span>
+              <span class="toggle-switch-text">Editable</span>
+            </label>
+
             <div class="code-tabs">
               <button class="code-tab" data-tab="vertex">Vertex</button>
               <button class="code-tab active" data-tab="fragment">Fragment</button>
@@ -141,12 +168,16 @@
               Download
             </button>
           </div>
+
+          <button id="btn-toggle-right-panel" class="panel-toggle-btn" title="Collapse Right Sidebar">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
         </div>
 
-        <div class="panel-body" style="padding:0;">
-          <div id="code-viewport" class="code-viewport">
-            <!-- Dynamically populated with syntax highlighted GLSL -->
-          </div>
+        <div class="panel-body" style="padding:0; position:relative; overflow:hidden;">
+          <div id="monaco-editor-container" style="width:100%; height:100%;"></div>
         </div>
       </aside>
 
