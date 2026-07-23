@@ -1,13 +1,99 @@
 /**
  * GLSL Code Generator / Transpiler
  * Converts Unity 6 ShaderGraph AST into WebGL 2.0 (GLSL ES 3.00) Vertex & Fragment Shaders.
+ * Only emits helper math functions used by nodes in the active graph.
  */
+
+const HELPER_FUNCTIONS = {
+  hash21: `float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}`,
+
+  gradientNoise: `float gradientNoise(vec2 st) {
+    vec2 i = floor(st);
+    vec2 f = fract(st);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash21(i + vec2(0.0,0.0)), hash21(i + vec2(1.0,0.0)), u.x),
+               mix(hash21(i + vec2(0.0,1.0)), hash21(i + vec2(1.0,1.0)), u.x), u.y);
+}`,
+
+  fresnelEffect: `float fresnelEffect(vec3 normal, vec3 viewDir, float power) {
+    return pow(1.0 - clamp(dot(normalize(normal), normalize(viewDir)), 0.0, 1.0), power);
+}`,
+
+  rotateUV: `vec2 rotateUV(vec2 uv, vec2 center, float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    return mat2(c, -s, s, c) * (uv - center) + center;
+}`,
+
+  voronoiHash: `vec2 voronoiHash(vec2 p) {
+    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+    return fract(sin(p) * 43758.5453);
+}`,
+
+  voronoiNoise: `float voronoiNoise(vec2 UV, float angleOffset, float cellDensity) {
+    vec2 st = UV * cellDensity;
+    vec2 g = floor(st);
+    vec2 f = fract(st);
+    float minDist = 8.0;
+
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 lattice = vec2(float(x), float(y));
+            vec2 rand = voronoiHash(g + lattice);
+            vec2 offset = 0.5 + 0.5 * sin(vec2(angleOffset) + rand * 6.2831853);
+            vec2 pos = lattice + offset - f;
+            float dist = dot(pos, pos);
+            if (dist < minDist) {
+                minDist = dist;
+            }
+        }
+    }
+    return sqrt(minDist);
+}`,
+
+  parallaxMapping: `vec2 parallaxMapping(sampler2D heightMap, vec2 uv, vec3 viewDir, float amplitude) {
+    float height = texture2D(heightMap, uv).r;
+    vec2 p = viewDir.xy * (height * amplitude);
+    return uv - p;
+}`,
+
+  proceduralParallaxMapping: `vec2 proceduralParallaxMapping(vec2 uv, vec3 viewDir, float amplitude) {
+    float height = voronoiNoise(uv, 0.0, 6.0);
+    vec2 p = viewDir.xy * (height * amplitude);
+    return uv - p;
+}`,
+
+  polarCoordinates: `vec2 polarCoordinates(vec2 uv, vec2 center, float radialScale, float lengthScale) {
+    vec2 delta = uv - center;
+    float radius = length(delta) * 2.0 * radialScale;
+    float angle = atan(delta.y, delta.x) / 6.283185307 + 0.5;
+    return vec2(angle, radius * lengthScale);
+}`,
+
+  checkerboardPattern: `float checkerboardPattern(vec2 uv, vec2 frequency) {
+    vec2 c = floor(uv * frequency);
+    return mod(c.x + c.y, 2.0);
+}`,
+
+  normalStrength: `vec3 normalStrength(vec3 inNormal, float strength) {
+    return vec3(inNormal.xy * strength, mix(1.0, inNormal.z, clamp(strength, 0.0, 1.0)));
+}`,
+
+  normalBlend: `vec3 normalBlend(vec3 n1, vec3 n2) {
+    return normalize(vec3(n1.xy + n2.xy, n1.z * n2.z));
+}`
+};
 
 export class GLSLCodeGenerator {
   constructor() {
     this.uniforms = [];
     this.varCounter = 0;
-    this.typeMap = new Map(); // tracks GLSL type per expression/variable
+    this.typeMap = new Map();
+    this.usedHelpers = new Set();
   }
 
   generateVarName(prefix = 'v') {
@@ -15,7 +101,14 @@ export class GLSLCodeGenerator {
     return `${prefix}_${this.varCounter}`;
   }
 
-  /** Infer the GLSL type of a known expression string */
+  requireHelper(name) {
+    if (this.usedHelpers.has(name)) return;
+    this.usedHelpers.add(name);
+    if (name === 'gradientNoise') this.requireHelper('hash21');
+    if (name === 'voronoiNoise') this.requireHelper('voronoiHash');
+    if (name === 'proceduralParallaxMapping') this.requireHelper('voronoiNoise');
+  }
+
   inferType(expr) {
     if (!expr) return 'float';
     if (this.typeMap.has(expr)) return this.typeMap.get(expr);
@@ -29,13 +122,11 @@ export class GLSLCodeGenerator {
     return 'float';
   }
 
-  /** Promote two types: returns the wider of the two */
   promoteType(a, b) {
     const rank = { 'float': 1, 'vec2': 2, 'vec3': 3, 'vec4': 4 };
     return (rank[a] || 1) >= (rank[b] || 1) ? a : b;
   }
 
-  /** Cast an expression to a target GLSL type */
   castTo(expr, fromType, toType) {
     if (fromType === toType) return expr;
     if (toType === 'float') {
@@ -58,15 +149,14 @@ export class GLSLCodeGenerator {
     return `${toType}(${expr})`;
   }
 
-  /**
-   * Main transpile entrypoint
-   */
   transpile(parsedGraph) {
     this.varCounter = 0;
     this.typeMap = new Map();
+    this.usedHelpers = new Set();
+
     const { properties, nodes, edges, target, executionOrder } = parsedGraph;
 
-    // 1. Generate Uniform Declarations & seed typeMap for properties
+    // 1. Generate Uniform Declarations
     const uniformLines = [];
     properties.forEach(prop => {
       let glslType = 'float';
@@ -78,13 +168,12 @@ export class GLSLCodeGenerator {
       uniformLines.push(`uniform ${glslType} ${prop.referenceName};`);
       this.typeMap.set(prop.referenceName, glslType);
     });
-    // Add default time uniform
+
     uniformLines.push(`uniform float u_time;`);
     uniformLines.push(`uniform vec2 u_resolution;`);
     this.typeMap.set('u_time', 'float');
     this.typeMap.set('u_resolution', 'vec2');
 
-    // Seed built-in variable types
     this.typeMap.set('Time', 'float');
     this.typeMap.set('sin(Time)', 'float');
     this.typeMap.set('UV.xy', 'vec2');
@@ -95,11 +184,10 @@ export class GLSLCodeGenerator {
     this.typeMap.set('Normal', 'vec3');
     this.typeMap.set('ViewDir', 'vec3');
 
-    // 2. Transpile Node Graph Execution to GLSL Statements
-    const nodeVarMap = new Map(); // nodeID_slotName -> GLSL expression / variable name
+    // 2. Transpile Node Graph Execution
+    const nodeVarMap = new Map();
     const codeBody = [];
 
-    // Pre-populate property nodes/references
     properties.forEach(prop => {
       nodeVarMap.set(`${prop.id}_Out`, prop.referenceName);
       nodeVarMap.set(`${prop.id}_out`, prop.referenceName);
@@ -117,7 +205,7 @@ export class GLSLCodeGenerator {
       this.transpileNode(node, edges, nodeVarMap, codeBody);
     });
 
-    // 3. Resolve Target Node Outputs (BaseColor, Color, Emission, Alpha, AlphaClip)
+    // 3. Resolve Target Outputs
     let finalBaseColor = 'vec4(1.0, 1.0, 1.0, 1.0)';
     let finalAlpha = '1.0';
     let finalEmission = 'vec3(0.0)';
@@ -137,114 +225,52 @@ export class GLSLCodeGenerator {
       });
     }
 
-    // 4. Three.js Fragment Shader (GLSL 100 compatible with Three.js ShaderMaterial)
+const HELPER_ORDER = [
+  'hash21',
+  'gradientNoise',
+  'voronoiHash',
+  'voronoiNoise',
+  'proceduralParallaxMapping',
+  'parallaxMapping',
+  'rotateUV',
+  'fresnelEffect',
+  'polarCoordinates',
+  'checkerboardPattern',
+  'normalStrength',
+  'normalBlend'
+];
+
+    // Generate dynamic helper code block in topological function order
+    const helperCodeBlock = HELPER_ORDER
+      .filter(h => this.usedHelpers.has(h))
+      .map(h => HELPER_FUNCTIONS[h])
+      .filter(Boolean)
+      .join('\n\n');
+
+    const helperSection = helperCodeBlock ? `// Node Math Helpers\n${helperCodeBlock}\n\n` : '';
+
+    // 4. Three.js Fragment Shader
     const threeFragmentShader = `
 precision highp float;
 
 // Uniforms
 ${uniformLines.join('\n')}
 
-// Varyings from Vertex Shader
+// Varyings
 varying vec3 v_position;
 varying vec3 v_normal;
 varying vec2 v_uv;
 varying vec3 v_viewDir;
 
-// Procedural Helper Math Functions
-float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
-}
-
-float gradientNoise(vec2 st) {
-    vec2 i = floor(st);
-    vec2 f = fract(st);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash21(i + vec2(0.0,0.0)), hash21(i + vec2(1.0,0.0)), u.x),
-               mix(hash21(i + vec2(0.0,1.0)), hash21(i + vec2(1.0,1.0)), u.x), u.y);
-}
-
-float fresnelEffect(vec3 normal, vec3 viewDir, float power) {
-    return pow(1.0 - clamp(dot(normalize(normal), normalize(viewDir)), 0.0, 1.0), power);
-}
-
-vec2 rotateUV(vec2 uv, vec2 center, float angle) {
-    float s = sin(angle);
-    float c = cos(angle);
-    return mat2(c, -s, s, c) * (uv - center) + center;
-}
-
-vec2 voronoiHash(vec2 p) {
-    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-    return fract(sin(p) * 43758.5453);
-}
-
-float voronoiNoise(vec2 UV, float angleOffset, float cellDensity) {
-    vec2 st = UV * cellDensity;
-    vec2 g = floor(st);
-    vec2 f = fract(st);
-    float minDist = 8.0;
-
-    for (int y = -1; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++) {
-            vec2 lattice = vec2(float(x), float(y));
-            vec2 rand = voronoiHash(g + lattice);
-            vec2 offset = 0.5 + 0.5 * sin(vec2(angleOffset) + rand * 6.2831853);
-            vec2 pos = lattice + offset - f;
-            float dist = dot(pos, pos);
-            if (dist < minDist) {
-                minDist = dist;
-            }
-        }
-    }
-    return sqrt(minDist);
-}
-
-vec2 parallaxMapping(sampler2D heightMap, vec2 uv, vec3 viewDir, float amplitude) {
-    float height = texture2D(heightMap, uv).r;
-    vec2 p = viewDir.xy * (height * amplitude);
-    return uv - p;
-}
-
-vec2 proceduralParallaxMapping(vec2 uv, vec3 viewDir, float amplitude) {
-    float height = voronoiNoise(uv, 0.0, 6.0);
-    vec2 p = viewDir.xy * (height * amplitude);
-    return uv - p;
-}
-
-vec2 polarCoordinates(vec2 uv, vec2 center, float radialScale, float lengthScale) {
-    vec2 delta = uv - center;
-    float radius = length(delta) * 2.0 * radialScale;
-    float angle = atan(delta.y, delta.x) / 6.283185307 + 0.5;
-    return vec2(angle, radius * lengthScale);
-}
-
-float checkerboardPattern(vec2 uv, vec2 frequency) {
-    vec2 c = floor(uv * frequency);
-    return mod(c.x + c.y, 2.0);
-}
-
-vec3 normalStrength(vec3 inNormal, float strength) {
-    return vec3(inNormal.xy * strength, mix(1.0, inNormal.z, clamp(strength, 0.0, 1.0)));
-}
-
-vec3 normalBlend(vec3 n1, vec3 n2) {
-    return normalize(vec3(n1.xy + n2.xy, n1.z * n2.z));
-}
-
-void main() {
-    // Standard Unity ShaderGraph converted variables
+${helperSection}void main() {
     vec4 UV = vec4(v_uv, 0.0, 0.0);
     float Time = u_time;
     vec3 Position = v_position;
     vec3 Normal = normalize(v_normal);
     vec3 ViewDir = normalize(v_viewDir);
 
-    // Node graph execution steps
 ${codeBody.map(line => '    ' + line).join('\n')}
 
-    // Target Master Output Assembly
     vec4 baseColor = ${finalBaseColor};
     vec3 emission = ${finalEmission};
     float alpha = ${finalAlpha};
@@ -256,7 +282,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 }
 `;
 
-    // 5. Three.js Vertex Shader (GLSL 100 compatible with Three.js ShaderMaterial)
+    // 5. Three.js Vertex Shader
     const threeVertexShader = `
 varying vec3 v_position;
 varying vec3 v_normal;
@@ -274,7 +300,7 @@ void main() {
 }
 `;
 
-    // 6. Standalone modern GLSL ES 3.0 Code for viewer & download
+    // 6. Standalone GLSL ES 3.0 Shaders
     const standaloneVertex = `#version 300 es
 precision highp float;
 
@@ -315,89 +341,7 @@ in vec3 v_viewDir;
 
 out vec4 fragColor;
 
-float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
-}
-
-float gradientNoise(vec2 st) {
-    vec2 i = floor(st);
-    vec2 f = fract(st);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash21(i + vec2(0.0,0.0)), hash21(i + vec2(1.0,0.0)), u.x),
-               mix(hash21(i + vec2(0.0,1.0)), hash21(i + vec2(1.0,1.0)), u.x), u.y);
-}
-
-float fresnelEffect(vec3 normal, vec3 viewDir, float power) {
-    return pow(1.0 - clamp(dot(normalize(normal), normalize(viewDir)), 0.0, 1.0), power);
-}
-
-vec2 rotateUV(vec2 uv, vec2 center, float angle) {
-    float s = sin(angle);
-    float c = cos(angle);
-    return mat2(c, -s, s, c) * (uv - center) + center;
-}
-
-vec2 voronoiHash(vec2 p) {
-    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-    return fract(sin(p) * 43758.5453);
-}
-
-float voronoiNoise(vec2 UV, float angleOffset, float cellDensity) {
-    vec2 st = UV * cellDensity;
-    vec2 g = floor(st);
-    vec2 f = fract(st);
-    float minDist = 8.0;
-
-    for (int y = -1; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++) {
-            vec2 lattice = vec2(float(x), float(y));
-            vec2 rand = voronoiHash(g + lattice);
-            vec2 offset = 0.5 + 0.5 * sin(vec2(angleOffset) + rand * 6.2831853);
-            vec2 pos = lattice + offset - f;
-            float dist = dot(pos, pos);
-            if (dist < minDist) {
-                minDist = dist;
-            }
-        }
-    }
-    return sqrt(minDist);
-}
-
-vec2 parallaxMapping(sampler2D heightMap, vec2 uv, vec3 viewDir, float amplitude) {
-    float height = texture2D(heightMap, uv).r;
-    vec2 p = viewDir.xy * (height * amplitude);
-    return uv - p;
-}
-
-vec2 proceduralParallaxMapping(vec2 uv, vec3 viewDir, float amplitude) {
-    float height = voronoiNoise(uv, 0.0, 6.0);
-    vec2 p = viewDir.xy * (height * amplitude);
-    return uv - p;
-}
-
-vec2 polarCoordinates(vec2 uv, vec2 center, float radialScale, float lengthScale) {
-    vec2 delta = uv - center;
-    float radius = length(delta) * 2.0 * radialScale;
-    float angle = atan(delta.y, delta.x) / 6.283185307 + 0.5;
-    return vec2(angle, radius * lengthScale);
-}
-
-float checkerboardPattern(vec2 uv, vec2 frequency) {
-    vec2 c = floor(uv * frequency);
-    return mod(c.x + c.y, 2.0);
-}
-
-vec3 normalStrength(vec3 inNormal, float strength) {
-    return vec3(inNormal.xy * strength, mix(1.0, inNormal.z, clamp(strength, 0.0, 1.0)));
-}
-
-vec3 normalBlend(vec3 n1, vec3 n2) {
-    return normalize(vec3(n1.xy + n2.xy, n1.z * n2.z));
-}
-
-void main() {
+${helperSection}void main() {
     vec4 UV = vec4(v_uv, 0.0, 0.0);
     float Time = u_time;
     vec3 Position = v_position;
@@ -512,6 +456,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
       case 'GradientNoiseNode':
       case 'GradientNoise': {
+        this.requireHelper('gradientNoise');
         const uvVal = getSlotVal('UV', 'UV.xy');
         const scale = node.scale || 10.0;
         const castUV = this.castTo(uvVal, this.inferType(uvVal), 'vec2');
@@ -523,6 +468,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
       case 'VoronoiNode':
       case 'Voronoi': {
+        this.requireHelper('voronoiNoise');
         const uvVal = getSlotVal('UV', 'UV.xy');
         const angleVal = getSlotVal('AngleOffset', '2.0');
         const densityVal = getSlotVal('CellDensity', '5.0');
@@ -553,8 +499,10 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         const castView = this.castTo(viewVal, this.inferType(viewVal), 'vec3');
 
         if (heightMapVal && this.typeMap.get(heightMapVal) === 'sampler2D') {
+          this.requireHelper('parallaxMapping');
           codeBody.push(`vec2 ${outVar} = parallaxMapping(${heightMapVal}, ${castUV}, ${castView}, ${castAmp});`);
         } else {
+          this.requireHelper('proceduralParallaxMapping');
           codeBody.push(`vec2 ${outVar} = proceduralParallaxMapping(${castUV}, ${castView}, ${castAmp});`);
         }
 
@@ -575,6 +523,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         if (texVal && this.typeMap.get(texVal) === 'sampler2D') {
           codeBody.push(`vec4 ${outVar} = texture2D(${texVal}, ${castUV});`);
         } else {
+          this.requireHelper('gradientNoise');
           codeBody.push(`vec4 ${outVar} = vec4(gradientNoise(${castUV} * 10.0));`);
         }
 
@@ -605,6 +554,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
       case 'PolarCoordinatesNode':
       case 'PolarCoordinates': {
+        this.requireHelper('polarCoordinates');
         const uvVal = getSlotVal('UV', 'UV.xy');
         const centerVal = getSlotVal('Center', 'vec2(0.5, 0.5)');
         const radialVal = getSlotVal('RadialScale', '1.0');
@@ -622,6 +572,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
       case 'CheckerboardNode':
       case 'Checkerboard': {
+        this.requireHelper('checkerboardPattern');
         const uvVal = getSlotVal('UV', 'UV.xy');
         const freqVal = getSlotVal('Frequency', 'vec2(10.0, 10.0)');
         const castUV = this.castTo(uvVal, this.inferType(uvVal), 'vec2');
@@ -635,6 +586,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
       case 'NormalStrengthNode':
       case 'NormalStrength': {
+        this.requireHelper('normalStrength');
         const normVal = getSlotVal('In', 'Normal');
         const strVal = getSlotVal('Strength', '1.0');
         const castNorm = this.castTo(normVal, this.inferType(normVal), 'vec3');
@@ -648,6 +600,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
       case 'NormalBlendNode':
       case 'NormalBlend': {
+        this.requireHelper('normalBlend');
         const n1 = getSlotVal('A', 'Normal');
         const n2 = getSlotVal('B', 'vec3(0.0, 0.0, 1.0)');
         const castN1 = this.castTo(n1, this.inferType(n1), 'vec3');
@@ -792,6 +745,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
       case 'FresnelNode':
       case 'Fresnel': {
+        this.requireHelper('fresnelEffect');
         const powerVal = getSlotVal('Power', '3.0');
         const castPow = this.castTo(powerVal, this.inferType(powerVal), 'float');
         codeBody.push(`float ${outVar} = fresnelEffect(Normal, ViewDir, ${castPow});`);
@@ -819,6 +773,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
       case 'RotateNode':
       case 'Rotate': {
+        this.requireHelper('rotateUV');
         const uvVal = getSlotVal('UV', 'UV.xy');
         const centerVal = getSlotVal('Center', 'vec2(0.5, 0.5)');
         const rotVal = getSlotVal('Rotation', '0.0');
