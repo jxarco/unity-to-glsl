@@ -207,6 +207,15 @@ class Application {
         this.preview3D.createMesh(e.target.value);
       });
     }
+
+    const rotateToggle = document.getElementById('toggle-rotate');
+    if (rotateToggle) {
+      rotateToggle.addEventListener('change', (e) => {
+        if (this.preview3D) {
+          this.preview3D.isAutoRotating = e.target.checked;
+        }
+      });
+    }
   }
 
   renderGraphInspector() {
