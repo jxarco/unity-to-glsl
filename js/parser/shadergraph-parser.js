@@ -31,6 +31,8 @@ export class ShaderGraphParser {
       } catch (e) {
         data = item;
       }
+    } else if (item.JSONnodeData && typeof item.JSONnodeData === 'object') {
+      data = { ...item.JSONnodeData };
     }
     if (item.typeInfo && item.typeInfo.fullName) {
       data.fullName = item.typeInfo.fullName;
@@ -184,12 +186,6 @@ export class ShaderGraphParser {
         toNode = edge.m_InputSlot.m_NodeGUIDSerialized || edge.m_InputSlot.m_NodeId;
         const toSlotId = edge.m_InputSlot.m_SlotId;
         toSlot = this.slotMap.get(`${toNode}_${toSlotId}`) || toSlotId || 'In';
-      }
-
-      // If fromNode is a property node, link property reference
-      const fromNodeObj = this.nodes.get(fromNode);
-      if (fromNodeObj && fromNodeObj.boundProperty) {
-        fromNode = `prop_${fromNodeObj.boundProperty.name}`;
       }
 
       return {

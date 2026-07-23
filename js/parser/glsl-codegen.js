@@ -458,9 +458,10 @@ ${codeBody.map(line => '    ' + line).join('\n')}
       case 'GradientNoise': {
         this.requireHelper('gradientNoise');
         const uvVal = getSlotVal('UV', 'UV.xy');
-        const scale = node.scale || 10.0;
+        const scaleVal = getSlotVal('Scale', '10.0');
         const castUV = this.castTo(uvVal, this.inferType(uvVal), 'vec2');
-        codeBody.push(`float ${outVar} = gradientNoise(${castUV} * ${scale.toFixed(1)});`);
+        const castScale = this.castTo(scaleVal, this.inferType(scaleVal), 'float');
+        codeBody.push(`float ${outVar} = gradientNoise(${castUV} * ${castScale});`);
         this.typeMap.set(outVar, 'float');
         varMap.set(`${node.id}_Out`, outVar);
         break;
@@ -866,6 +867,12 @@ ${codeBody.map(line => '    ' + line).join('\n')}
   }
 
   ensureVec4(val) {
+    if (!val) return 'vec4(1.0)';
+    if (val.startsWith('vec4')) return val;
+    if (this.typeMap.get(val) === 'vec4') return val;
+    if (this.typeMap.get(val) === 'vec3') return `vec4(${val}, 1.0)`;
+    if (this.typeMap.get(val) === 'vec2') return `vec4(${val}, 0.0, 1.0)`;
+    if (this.typeMap.get(val) === 'float') return `vec4(vec3(${val}), 1.0)`;
     const t = this.inferType(val);
     if (t === 'vec4') return val;
     if (t === 'vec3') return `vec4(${val}, 1.0)`;
