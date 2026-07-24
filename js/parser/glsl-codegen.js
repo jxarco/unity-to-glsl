@@ -1,8 +1,4 @@
-/**
- * GLSL Code Generator / Transpiler
- * Converts Unity 6 ShaderGraph AST into WebGL 2.0 (GLSL ES 3.00) Vertex & Fragment Shaders.
- * Only emits helper math functions used by nodes in the active graph.
- */
+import { globalSubGraphRegistry } from './subgraph-registry.js';
 
 const HELPER_FUNCTIONS = {
   hash21: `float hash21(vec2 p) {
@@ -1232,6 +1228,81 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         varMap.set(`${node.id}_out`, outVar);
         varMap.set(`${node.id}_0`, outVar);
         varMap.set(`${node.id}_3`, outVar);
+        break;
+      }
+
+      case 'SubGraphNode':
+      case 'SubGraph': {
+        let subGuid = '';
+        if (node.raw && node.raw.m_SerializedSubGraph) {
+          try {
+            const parsed = typeof node.raw.m_SerializedSubGraph === 'string' ? JSON.parse(node.raw.m_SerializedSubGraph) : node.raw.m_SerializedSubGraph;
+            subGuid = parsed?.subGraph?.guid || '';
+          } catch(e) {}
+        }
+
+        const subEntry = globalSubGraphRegistry.getSubGraph(subGuid) || globalSubGraphRegistry.getSubGraph(node.name);
+
+        if (subEntry && subEntry.ast && subEntry.ast.nodes && subEntry.ast.nodes.length > 0) {
+          codeBody.push(`// --- SUBGRAPH INLINE BEGIN: ${subEntry.name} (${subEntry.filename}) ---`);
+          const subVarMap = new Map();
+
+          // Bind subgraph properties and inputs from parent node inputs
+          (subEntry.ast.properties || []).forEach(prop => {
+            const parentInputVal = getSlotVal(prop.name, getSlotVal(prop.referenceName, null));
+            if (parentInputVal) {
+              subVarMap.set(prop.referenceName, parentInputVal);
+              subVarMap.set(`prop_${prop.name}_Out`, parentInputVal);
+              subVarMap.set(`prop_${prop.name}_out`, parentInputVal);
+              subVarMap.set(`prop_${prop.name}_0`, parentInputVal);
+            }
+          });
+
+          // Transpile each node inside the subgraph in topological order
+          const execNodes = (subEntry.ast.executionOrder && subEntry.ast.executionOrder.length > 0) ? subEntry.ast.executionOrder : subEntry.ast.nodes;
+          execNodes.forEach(subNode => {
+            if (!subNode.type.includes('SubGraphOutput') && !subNode.type.includes('BlockNode')) {
+              this.transpileNode(subNode, subEntry.ast.edges, subVarMap, codeBody);
+            }
+          });
+
+          // Resolve final output from SubGraphOutputNode or last node in execution order
+          const outputNode = subEntry.ast.nodes.find(n => n.type.includes('SubGraphOutput') || n.name.includes('Output')) || execNodes[execNodes.length - 1];
+
+          let subOutVal = null;
+          if (outputNode) {
+            const incomingEdge = subEntry.ast.edges.find(e => e.toNode === outputNode.id);
+            if (incomingEdge) {
+              subOutVal = subVarMap.get(`${incomingEdge.fromNode}_${incomingEdge.fromSlot}`) ||
+                          subVarMap.get(`${incomingEdge.fromNode}_Out`) ||
+                          subVarMap.get(`${incomingEdge.fromNode}_out`) ||
+                          subVarMap.get(`${incomingEdge.fromNode}_0`) ||
+                          subVarMap.get(incomingEdge.fromNode);
+            }
+          }
+
+          if (!subOutVal) {
+            subOutVal = getSlotVal('In', getSlotVal('0', 'vec4(1.0)'));
+          }
+
+          const outType = this.inferType(subOutVal);
+          codeBody.push(`${outType} ${outVar} = ${subOutVal};`);
+          codeBody.push(`// --- SUBGRAPH INLINE END: ${subEntry.name} ---`);
+          this.typeMap.set(outVar, outType);
+        } else {
+          const inVal = getSlotVal('In', getSlotVal('0', 'vec4(1.0)'));
+          const inType = this.inferType(inVal);
+          const subDisplayName = node.name || 'SubGraph';
+          this.unsupportedNodes.add(`SubGraph "${subDisplayName}"`);
+          codeBody.push(`// --- MISSING SUBGRAPH: ${subDisplayName} ---`);
+          codeBody.push(`${inType} ${outVar} = ${inVal};`);
+          this.typeMap.set(outVar, inType);
+        }
+
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_1`, outVar);
         break;
       }
 

@@ -4,6 +4,7 @@
 
 import { ShaderGraphParser } from './parser/shadergraph-parser.js';
 import { GLSLCodeGenerator } from './parser/glsl-codegen.js';
+import { globalSubGraphRegistry } from './parser/subgraph-registry.js';
 import { Preview3D } from './viewport/preview-3d.js';
 import { Graph2DView } from './viewport/graph-2d.js';
 import { CodeEditorUI } from './ui/code-editor.js';
@@ -499,32 +500,62 @@ class Application {
     const fileInput = document.getElementById('file-input');
 
     if (dropzone && fileInput) {
+      fileInput.multiple = true;
+      fileInput.accept = '.shadergraph,.shadersubgraph,.json,.txt';
       dropzone.addEventListener('click', () => fileInput.click());
 
       fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) this.readShaderFile(file);
+        if (e.target.files && e.target.files.length > 0) {
+          this.readShaderFiles(Array.from(e.target.files));
+        }
       });
 
       window.addEventListener('dragover', (e) => e.preventDefault());
       window.addEventListener('drop', (e) => {
         e.preventDefault();
-        const file = e.dataTransfer.files[0];
-        if (file && (file.name.endsWith('.shadergraph') || file.name.endsWith('.json') || file.name.endsWith('.txt'))) {
-          this.readShaderFile(file);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          this.readShaderFiles(Array.from(e.dataTransfer.files));
         }
       });
     }
   }
 
-  readShaderFile(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      this.loadShaderGraph(e.target.result);
+  readShaderFiles(files) {
+    const mainGraphFile = files.find(f => f.name.endsWith('.shadergraph')) || files[0];
+    let subGraphsLoaded = 0;
+    let mainGraphContent = '';
+
+    const readPromises = files.map(file => {
+      return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target.result;
+          if (file.name.endsWith('.shadersubgraph') || (file !== mainGraphFile && file.name.toLowerCase().includes('subgraph'))) {
+            globalSubGraphRegistry.registerSubGraph(file.name, content);
+            subGraphsLoaded++;
+          } else if (file === mainGraphFile) {
+            mainGraphContent = content;
+          } else {
+            globalSubGraphRegistry.registerSubGraph(file.name, content);
+          }
+          resolve();
+        };
+        reader.readAsText(file);
+      });
+    });
+
+    Promise.all(readPromises).then(() => {
+      if (subGraphsLoaded > 0) {
+        this.showToast(`Registered ${subGraphsLoaded} SubGraph file(s) in SubGraph Library`, 'info', 4500);
+      }
+      if (mainGraphContent) {
+        this.loadShaderGraph(mainGraphContent);
+      } else if (files.length === 1 && files[0].name.endsWith('.shadersubgraph')) {
+        this.showToast(`SubGraph '${files[0].name}' added to library`, 'info', 5000);
+      }
       const modal = document.getElementById('import-modal');
       if (modal) modal.classList.remove('open');
-    };
-    reader.readAsText(file);
+    });
   }
 
   setupModal() {
