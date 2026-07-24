@@ -17,6 +17,52 @@ export class ShaderGraphParser {
     this.executionOrder = [];
     this.slotMap = new Map(); // `${nodeId}_${slotId}` -> slotName
     this.propertyGuidMap = new Map(); // propGuid -> property Object
+    this.objectMap = new Map();
+  }
+
+  /**
+   * Helper to parse concatenated JSON objects (Unity 2021+ ShaderGraph format)
+   */
+  parseConcatenatedJson(str) {
+    const objects = [];
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    let startIdx = -1;
+
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (char === '\\' && inString) {
+        escape = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (char === '{') {
+          if (depth === 0) startIdx = i;
+          depth++;
+        } else if (char === '}') {
+          depth--;
+          if (depth === 0 && startIdx !== -1) {
+            const jsonChunk = str.slice(startIdx, i + 1);
+            try {
+              objects.push(JSON.parse(jsonChunk));
+            } catch (e) {
+              console.warn('Failed to parse multi-JSON chunk:', e);
+            }
+            startIdx = -1;
+          }
+        }
+      }
+    }
+    return objects;
   }
 
   /**
@@ -25,14 +71,20 @@ export class ShaderGraphParser {
   unpack(item) {
     if (!item) return null;
     let data = item;
-    if (typeof item.JSONnodeData === 'string') {
+
+    // Handle m_Id pointer resolution if item is a reference object { "m_Id": "..." }
+    if (typeof item === 'object' && item.m_Id && !item.m_Type && !item.m_Name && this.objectMap.has(item.m_Id)) {
+      data = this.objectMap.get(item.m_Id);
+    }
+
+    if (typeof data.JSONnodeData === 'string') {
       try {
-        data = JSON.parse(item.JSONnodeData);
+        data = JSON.parse(data.JSONnodeData);
       } catch (e) {
-        data = item;
+        // Keep data as is
       }
-    } else if (item.JSONnodeData && typeof item.JSONnodeData === 'object') {
-      data = { ...item.JSONnodeData };
+    } else if (data.JSONnodeData && typeof data.JSONnodeData === 'object') {
+      data = { ...data.JSONnodeData };
     }
     if (item.typeInfo && item.typeInfo.fullName) {
       data.fullName = item.typeInfo.fullName;
@@ -41,37 +93,65 @@ export class ShaderGraphParser {
   }
 
   /**
-   * Parse Unity 6 JSON object or string
+   * Parse Unity JSON object, multi-JSON string, or parsed array
    */
   parse(jsonInput) {
     this.reset();
     
-    let data;
+    let objectsList = [];
     if (typeof jsonInput === 'string') {
       try {
-        data = JSON.parse(jsonInput);
+        const parsed = JSON.parse(jsonInput);
+        objectsList = Array.isArray(parsed) ? parsed : [parsed];
       } catch (err) {
-        throw new Error('Invalid JSON format: ' + err.message);
+        objectsList = this.parseConcatenatedJson(jsonInput);
+        if (objectsList.length === 0) {
+          throw new Error('Invalid JSON format: ' + err.message);
+        }
       }
+    } else if (Array.isArray(jsonInput)) {
+      objectsList = jsonInput;
     } else {
-      data = jsonInput;
+      objectsList = [jsonInput];
     }
 
+    // Index all objects by m_ObjectId or m_Guid
+    objectsList.forEach(obj => {
+      if (!obj) return;
+      const id = obj.m_ObjectId || (obj.m_Guid && obj.m_Guid.m_GuidSerialized) || obj.m_GuidSerialized;
+      if (id) {
+        this.objectMap.set(id, obj);
+      }
+    });
+
+    let data = objectsList.find(o => o && o.m_Type === 'UnityEditor.ShaderGraph.GraphData') || objectsList[0];
     this.rawGraph = data;
 
     // 1. Extract Properties
-    const rawProps = data.m_SerializedProperties || data.m_Properties || data.properties || [];
+    let rawProps = data.m_SerializedProperties || data.m_Properties || data.properties || [];
+    if (rawProps.length === 0) {
+      rawProps = objectsList.filter(o => o && o.m_Type && o.m_Type.endsWith('ShaderProperty'));
+    }
     this.parseProperties(rawProps);
 
-    // 2. Extract Nodes
-    const rawNodes = data.m_SerializableNodes || data.m_Nodes || data.nodes || [];
+    // 2. Extract Nodes (including vertex & fragment block context nodes)
+    let rawNodes = data.m_SerializableNodes || data.m_Nodes || data.nodes || [];
+    if (data.m_VertexContext && Array.isArray(data.m_VertexContext.m_Blocks)) {
+      rawNodes = [...rawNodes, ...data.m_VertexContext.m_Blocks];
+    }
+    if (data.m_FragmentContext && Array.isArray(data.m_FragmentContext.m_Blocks)) {
+      rawNodes = [...rawNodes, ...data.m_FragmentContext.m_Blocks];
+    }
+    if (rawNodes.length === 0) {
+      rawNodes = objectsList.filter(o => o && o.m_Type && o.m_Type.endsWith('Node'));
+    }
     this.parseNodes(rawNodes);
 
     // 3. Extract Edges / Connections
     const rawEdges = data.m_SerializableEdges || data.m_Edges || data.edges || [];
     this.parseEdges(rawEdges);
 
-    // 4. Identify Target Node (Universal Master / PBR / Lit / Unlit Target)
+    // 4. Identify Target Node (Universal Master / PBR / Lit / Unlit Target / Fragment Color Block)
     this.identifyTarget();
 
     // 5. Build Dependency Topology (Topological Sort)
@@ -89,16 +169,37 @@ export class ShaderGraphParser {
   parseProperties(rawProps) {
     this.properties = rawProps.map((item, idx) => {
       const prop = this.unpack(item);
+      if (!prop) return null;
       const name = prop.m_Name || prop.name || `Property_${idx}`;
-      const refName = prop.m_OverrideReferenceName || prop.m_ReferenceName || prop.referenceName || `_${name.replace(/\s+/g, '')}`;
+      const refName = (prop.m_OverrideReferenceName && prop.m_OverrideReferenceName.trim())
+        || prop.m_DefaultReferenceName
+        || prop.m_ReferenceName
+        || prop.referenceName
+        || `_${name.replace(/\s+/g, '')}`;
       
       let rawType = prop.fullName || prop.m_Type || prop.type || 'Vector1ShaderProperty';
-      let type = rawType.replace('UnityEditor.ShaderGraph.', '').replace('ShaderProperty', '');
-      if (type === 'Vector1') type = 'Vector1';
+      let type = rawType
+        .replace('UnityEditor.ShaderGraph.Internal.', '')
+        .replace('UnityEditor.ShaderGraph.', '')
+        .replace('ShaderProperty', '');
+      if (type === 'Vector1' || type === 'Float') type = 'Vector1';
       else if (type === 'Color') type = 'Color';
+      else if (type === 'Vector2') type = 'Vector2';
+      else if (type === 'Vector3') type = 'Vector3';
+      else if (type === 'Vector4') type = 'Vector4';
+      else if (type === 'Texture2D') type = 'Texture2D';
+      else if (type === 'Cubemap' || type.includes('Cubemap')) type = 'Cubemap';
 
-      const defVal = prop.m_Value !== undefined ? prop.m_Value : (prop.m_DefaultValue !== undefined ? prop.m_DefaultValue : (type === 'Color' ? { r: 1, g: 1, b: 1, a: 1 } : 0.5));
-      const guid = prop.m_Guid ? prop.m_Guid.m_GuidSerialized : (prop.m_GuidSerialized || prop.m_ObjectId || `prop_${idx}`);
+      let defVal = prop.m_Value !== undefined ? prop.m_Value : (prop.m_DefaultValue !== undefined ? prop.m_DefaultValue : (type === 'Color' ? { r: 1, g: 1, b: 1, a: 1 } : 0.5));
+      
+      // If Unity asset defaults are black (0,0,0) or 0.0 value, provide vibrant non-black fallback defaults
+      if (type === 'Color' && typeof defVal === 'object' && defVal.r === 0 && defVal.g === 0 && defVal.b === 0) {
+        defVal = { r: 0.1, g: 0.7, b: 1.0, a: 1.0 };
+      } else if (type === 'Vector1' && (defVal === 0 || defVal === 0.0)) {
+        defVal = 0.8;
+      }
+
+      const guid = prop.m_ObjectId || (prop.m_Guid ? prop.m_Guid.m_GuidSerialized : (prop.m_GuidSerialized || `prop_${idx}`));
 
       let minVal = undefined;
       let maxVal = undefined;
@@ -120,35 +221,53 @@ export class ShaderGraphParser {
 
       this.propertyGuidMap.set(guid, parsedProp);
       return parsedProp;
-    });
+    }).filter(Boolean);
   }
 
   parseNodes(rawNodes) {
     rawNodes.forEach((item, idx) => {
       const n = this.unpack(item);
-      const id = n.m_GuidSerialized || n.m_ObjectId || n.id || `node_${idx}`;
+      if (!n) return;
+
+      const id = n.m_ObjectId || n.m_GuidSerialized || n.id || `node_${idx}`;
       const rawType = n.fullName || n.m_Type || n.type || 'UnknownNode';
-      const nodeType = rawType.replace('UnityEditor.ShaderGraph.', '').replace('UnityEditor.Rendering.Universal.ShaderGraph.', '').replace('Node', '');
-      let name = n.m_Name || n.name || nodeType;
+      let nodeType = rawType.replace('UnityEditor.ShaderGraph.', '').replace('UnityEditor.Rendering.Universal.ShaderGraph.', '').replace('Node', '');
+      let name = n.m_Name || n.name || n.m_SerializedDescriptor || nodeType;
 
       // Handle PropertyNode specifically
       let boundProperty = null;
       if (nodeType === 'Property' || rawType.includes('PropertyNode')) {
-        const propGuid = n.m_PropertyGuidSerialized;
-        if (propGuid && this.propertyGuidMap.has(propGuid)) {
-          boundProperty = this.propertyGuidMap.get(propGuid);
-          name = boundProperty.name;
+        const propGuid = n.m_PropertyGuidSerialized || (n.m_Property && n.m_Property.m_Id);
+        if (propGuid) {
+          if (this.propertyGuidMap.has(propGuid)) {
+            boundProperty = this.propertyGuidMap.get(propGuid);
+            name = boundProperty.name;
+          } else if (this.objectMap.has(propGuid)) {
+            const propObj = this.objectMap.get(propGuid);
+            const resolvedGuid = propObj.m_ObjectId || (propObj.m_Guid && propObj.m_Guid.m_GuidSerialized) || propObj.m_GuidSerialized;
+            if (this.propertyGuidMap.has(resolvedGuid)) {
+              boundProperty = this.propertyGuidMap.get(resolvedGuid);
+              name = boundProperty.name;
+            }
+          }
         }
       }
 
       // Catalog slot IDs to slot names
-      const slots = n.m_SerializableSlots || n.slots || [];
+      const slots = n.m_SerializableSlots || n.m_Slots || n.slots || [];
       slots.forEach(slotItem => {
         const slot = this.unpack(slotItem);
+        if (!slot) return;
         const slotId = slot.m_Id !== undefined ? slot.m_Id : slot.id;
         const slotName = slot.m_ShaderOutputName || slot.m_DisplayName || slot.name || `Slot_${slotId}`;
         if (slotId !== undefined) {
           this.slotMap.set(`${id}_${slotId}`, slotName);
+        }
+        if (slotItem.m_Id) {
+          this.slotMap.set(`${id}_${slotItem.m_Id}`, slotName);
+        }
+        if (slot.m_ObjectId) {
+          this.slotMap.set(`${id}_${slot.m_ObjectId}`, slotName);
         }
       });
 
@@ -169,21 +288,22 @@ export class ShaderGraphParser {
   parseEdges(rawEdges) {
     this.edges = rawEdges.map(item => {
       const edge = this.unpack(item);
-      
+      if (!edge) return null;
+
       let fromNode = edge.fromNode || edge.m_FromNode;
       let fromSlot = edge.fromSlot || edge.m_FromSlot;
       let toNode = edge.toNode || edge.m_ToNode;
       let toSlot = edge.toSlot || edge.m_ToSlot;
 
-      // Check Unity 6 m_OutputSlot / m_InputSlot structure
+      // Check Unity 6 & modern m_OutputSlot / m_InputSlot structure
       if (edge.m_OutputSlot) {
-        fromNode = edge.m_OutputSlot.m_NodeGUIDSerialized || edge.m_OutputSlot.m_NodeId;
+        fromNode = edge.m_OutputSlot.m_Node?.m_Id || edge.m_OutputSlot.m_NodeGUIDSerialized || edge.m_OutputSlot.m_NodeId;
         const fromSlotId = edge.m_OutputSlot.m_SlotId;
         fromSlot = this.slotMap.get(`${fromNode}_${fromSlotId}`) || fromSlotId || 'Out';
       }
 
       if (edge.m_InputSlot) {
-        toNode = edge.m_InputSlot.m_NodeGUIDSerialized || edge.m_InputSlot.m_NodeId;
+        toNode = edge.m_InputSlot.m_Node?.m_Id || edge.m_InputSlot.m_NodeGUIDSerialized || edge.m_InputSlot.m_NodeId;
         const toSlotId = edge.m_InputSlot.m_SlotId;
         toSlot = this.slotMap.get(`${toNode}_${toSlotId}`) || toSlotId || 'In';
       }
@@ -194,13 +314,13 @@ export class ShaderGraphParser {
         toNode,
         toSlot: String(toSlot)
       };
-    }).filter(e => e.fromNode && e.toNode);
+    }).filter(e => e && e.fromNode && e.toNode);
   }
 
   identifyTarget() {
-    // Find UniversalTarget, LitTarget, MasterNode or fallback to last node
+    // Find UniversalTarget, LitTarget, MasterNode, or SurfaceDescription BaseColor block
     for (const [id, node] of this.nodes.entries()) {
-      if (node.type.includes('Target') || node.type.includes('Master')) {
+      if (node.type.includes('Target') || node.type.includes('Master') || node.name.includes('BaseColor') || node.name.includes('SurfaceDescription')) {
         this.targetNode = node;
         return;
       }

@@ -127,15 +127,23 @@ export class Preview3D {
     properties.forEach(prop => {
       if (prop.type === 'Color') {
         const c = prop.defaultValue || { r: 1, g: 1, b: 1, a: 1 };
-        uniforms[prop.referenceName] = { value: new THREE.Vector4(c.r, c.g, c.b, c.a || 1.0) };
+        uniforms[prop.referenceName] = { value: new THREE.Vector4(c.r, c.g, c.b, c.a !== undefined ? c.a : 1.0) };
       } else if (prop.type === 'Vector4') {
         const v = prop.defaultValue || { x: 0, y: 0, z: 0, w: 0 };
-        uniforms[prop.referenceName] = { value: new THREE.Vector4(v.x, v.y, v.z, v.w) };
+        uniforms[prop.referenceName] = { value: new THREE.Vector4(v.x || 0, v.y || 0, v.z || 0, v.w !== undefined ? v.w : 1.0) };
+      } else if (prop.type === 'Vector3') {
+        const v = prop.defaultValue || { x: 0, y: 0, z: 0 };
+        uniforms[prop.referenceName] = { value: new THREE.Vector3(v.x || 0, v.y || 0, v.z || 0) };
+      } else if (prop.type === 'Vector2') {
+        const v = prop.defaultValue || { x: 0, y: 0 };
+        uniforms[prop.referenceName] = { value: new THREE.Vector2(v.x || 0, v.y || 0) };
       } else if (prop.type === 'Vector1') {
         const val = typeof prop.defaultValue === 'number' ? prop.defaultValue : 0.5;
         uniforms[prop.referenceName] = { value: val };
       } else if (prop.type === 'Texture2D') {
         uniforms[prop.referenceName] = { value: this.createDummyTexture() };
+      } else if (prop.type === 'Cubemap') {
+        uniforms[prop.referenceName] = { value: this.createDummyCubemap() };
       }
     });
 
@@ -180,6 +188,25 @@ export class Preview3D {
     return texture;
   }
 
+  createDummyCubemap() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 128);
+    grad.addColorStop(0, '#38bdf8');
+    grad.addColorStop(0.5, '#818cf8');
+    grad.addColorStop(1, '#0f172a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 128, 128);
+
+    const cubeTexture = new THREE.CubeTexture([
+      canvas, canvas, canvas, canvas, canvas, canvas
+    ]);
+    cubeTexture.needsUpdate = true;
+    return cubeTexture;
+  }
+
   updateTextureUniform(name, imageSrc) {
     const loader = new THREE.TextureLoader();
     loader.load(imageSrc, (tex) => {
@@ -194,6 +221,31 @@ export class Preview3D {
     });
   }
 
+  updateCubemapUniform(name, imageSrc) {
+    const img = new Image();
+    img.onload = () => {
+      const canvases = [];
+      for (let i = 0; i < 6; i++) {
+        const c = document.createElement('canvas');
+        c.width = img.width || 512;
+        c.height = img.height || 512;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        canvases.push(c);
+      }
+      const cubeTex = new THREE.CubeTexture(canvases);
+      cubeTex.needsUpdate = true;
+
+      if (this.materialUniforms[name]) {
+        this.materialUniforms[name].value = cubeTex;
+        if (this.currentMaterial) {
+          this.currentMaterial.uniformsNeedUpdate = true;
+        }
+      }
+    };
+    img.src = imageSrc;
+  }
+
   updateUniformValue(name, value) {
     if (this.materialUniforms[name]) {
       if (this.materialUniforms[name].value instanceof THREE.Vector4) {
@@ -201,7 +253,15 @@ export class Preview3D {
           const color = new THREE.Color(value);
           this.materialUniforms[name].value.set(color.r, color.g, color.b, 1.0);
         } else if (typeof value === 'object') {
-          this.materialUniforms[name].value.set(value.r, value.g, value.b, value.a ?? 1.0);
+          this.materialUniforms[name].value.set(value.x ?? value.r ?? 0, value.y ?? value.g ?? 0, value.z ?? value.b ?? 0, value.w ?? value.a ?? 1.0);
+        }
+      } else if (this.materialUniforms[name].value instanceof THREE.Vector3) {
+        if (typeof value === 'object') {
+          this.materialUniforms[name].value.set(value.x ?? value.r ?? 0, value.y ?? value.g ?? 0, value.z ?? value.b ?? 0);
+        }
+      } else if (this.materialUniforms[name].value instanceof THREE.Vector2) {
+        if (typeof value === 'object') {
+          this.materialUniforms[name].value.set(value.x ?? value.r ?? 0, value.y ?? value.g ?? 0);
         }
       } else if (typeof this.materialUniforms[name].value === 'number') {
         this.materialUniforms[name].value = parseFloat(value);

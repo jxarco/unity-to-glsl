@@ -359,6 +359,85 @@ class Application {
           wrapper.appendChild(btn);
           wrapper.appendChild(fileInput);
           group.appendChild(wrapper);
+        } else if (prop.type === 'Vector2' || prop.type === 'Vector3' || prop.type === 'Vector4') {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'vector-inputs-wrapper';
+          wrapper.style.display = 'flex';
+          wrapper.style.gap = '6px';
+          wrapper.style.marginTop = '4px';
+
+          const components = prop.type === 'Vector2' ? ['x', 'y'] : (prop.type === 'Vector3' ? ['x', 'y', 'z'] : ['x', 'y', 'z', 'w']);
+          const currentVal = (typeof prop.defaultValue === 'object' && prop.defaultValue) ? { ...prop.defaultValue } : { x: 0, y: 0, z: 0, w: 0 };
+
+          components.forEach(comp => {
+            const compBox = document.createElement('div');
+            compBox.style.display = 'flex';
+            compBox.style.alignItems = 'center';
+            compBox.style.gap = '3px';
+            compBox.style.flex = '1';
+
+            const compTag = document.createElement('span');
+            compTag.textContent = comp.toUpperCase();
+            compTag.style.fontSize = '10px';
+            compTag.style.color = 'var(--text-muted)';
+
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'prop-val-input';
+            input.step = 'any';
+            input.value = String(currentVal[comp] !== undefined ? currentVal[comp] : 0);
+            input.style.width = '100%';
+
+            input.addEventListener('input', (e) => {
+              const val = parseFloat(e.target.value);
+              currentVal[comp] = isNaN(val) ? 0 : val;
+              this.preview3D.updateUniformValue(prop.referenceName, currentVal);
+            });
+
+            compBox.appendChild(compTag);
+            compBox.appendChild(input);
+            wrapper.appendChild(compBox);
+          });
+
+          group.appendChild(wrapper);
+        } else if (prop.type === 'Cubemap') {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'texture-picker-wrapper';
+          wrapper.style.display = 'flex';
+          wrapper.style.flexDirection = 'column';
+          wrapper.style.gap = '6px';
+          wrapper.style.marginTop = '4px';
+
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = 'image/*';
+          fileInput.style.display = 'none';
+
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-secondary btn-sm';
+          btn.style.width = '100%';
+          btn.style.justifyContent = 'center';
+          btn.style.fontSize = '11px';
+          btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Choose Cubemap Texture (${prop.name})...`;
+
+          btn.addEventListener('click', () => fileInput.click());
+
+          fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (evt) => {
+                const dataUrl = evt.target.result;
+                this.preview3D.updateCubemapUniform(prop.referenceName, dataUrl);
+                btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ${file.name}`;
+              };
+              reader.readAsDataURL(file);
+            }
+          });
+
+          wrapper.appendChild(btn);
+          wrapper.appendChild(fileInput);
+          group.appendChild(wrapper);
         }
 
         propContainer.appendChild(group);

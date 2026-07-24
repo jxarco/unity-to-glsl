@@ -85,6 +85,12 @@ const HELPER_FUNCTIONS = {
 
   normalBlend: `vec3 normalBlend(vec3 n1, vec3 n2) {
     return normalize(vec3(n1.xy + n2.xy, n1.z * n2.z));
+}`,
+
+  rectanglePattern: `float rectanglePattern(vec2 uv, float width, float height) {
+    vec2 halfSize = vec2(width, height) * 0.5;
+    vec2 re = step(vec2(0.5) - halfSize, uv) - step(vec2(0.5) + halfSize, uv);
+    return re.x * re.y;
 }`
 };
 
@@ -164,6 +170,7 @@ export class GLSLCodeGenerator {
       else if (prop.type === 'Vector3') glslType = 'vec3';
       else if (prop.type === 'Vector2') glslType = 'vec2';
       else if (prop.type === 'Texture2D') glslType = 'sampler2D';
+      else if (prop.type === 'Cubemap') glslType = 'samplerCube';
 
       uniformLines.push(`uniform ${glslType} ${prop.referenceName};`);
       this.typeMap.set(prop.referenceName, glslType);
@@ -210,20 +217,29 @@ export class GLSLCodeGenerator {
     let finalAlpha = '1.0';
     let finalEmission = 'vec3(0.0)';
 
-    if (target) {
-      const incoming = edges.filter(e => e.toNode === target.id);
-      incoming.forEach(e => {
-        const val = nodeVarMap.get(`${e.fromNode}_${e.fromSlot}`) ||
-                    nodeVarMap.get(`${e.fromNode}_Out`) ||
-                    nodeVarMap.get(`${e.fromNode}_out`) ||
-                    nodeVarMap.get(e.fromNode) ||
-                    'vec4(1.0)';
-        const slot = e.toSlot ? String(e.toSlot).toLowerCase() : '';
-        if (slot === 'basecolor' || slot === 'color' || slot === '0') finalBaseColor = this.ensureVec4(val);
-        else if (slot === 'alpha' || slot === '7') finalAlpha = this.ensureFloat(val);
-        else if (slot === 'emission') finalEmission = this.ensureVec3(val);
-      });
-    }
+    nodes.forEach(n => {
+      const isTarget = n.type.includes('Target') || n.type.includes('Master') || n.name.includes('BaseColor') || n.name.includes('SurfaceDescription') || n.rawType.includes('BlockNode');
+      if (isTarget) {
+        const incoming = edges.filter(e => e.toNode === n.id);
+        incoming.forEach(e => {
+          const val = nodeVarMap.get(`${e.fromNode}_${e.fromSlot}`) ||
+                      nodeVarMap.get(`${e.fromNode}_Out`) ||
+                      nodeVarMap.get(`${e.fromNode}_out`) ||
+                      nodeVarMap.get(e.fromNode) ||
+                      'vec4(1.0)';
+          const slot = e.toSlot ? String(e.toSlot).toLowerCase() : '';
+          const nameLower = (n.name || '').toLowerCase();
+
+          if (nameLower.includes('basecolor') || slot === 'basecolor' || slot === 'color' || slot === '0' || slot === 'base color' || (nameLower.includes('basecolor') && slot === 'in')) {
+            finalBaseColor = this.ensureVec4(val);
+          } else if (nameLower.includes('alpha') || slot === 'alpha' || slot === '7' || (nameLower.includes('alpha') && slot === 'in')) {
+            finalAlpha = this.ensureFloat(val);
+          } else if (nameLower.includes('emission') || slot === 'emission') {
+            finalEmission = this.ensureVec3(val);
+          }
+        });
+      }
+    });
 
 const HELPER_ORDER = [
   'hash21',
@@ -237,7 +253,8 @@ const HELPER_ORDER = [
   'polarCoordinates',
   'checkerboardPattern',
   'normalStrength',
-  'normalBlend'
+  'normalBlend',
+  'rectanglePattern'
 ];
 
     // Generate dynamic helper code block in topological function order
@@ -378,13 +395,31 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         (slotName === 'B' && (e.toSlot === '1' || e.toSlot === 1)) ||
         (slotName === 'T' && (e.toSlot === '2' || e.toSlot === 2)) ||
         (slotName === 'In' && (e.toSlot === '0' || e.toSlot === 0)) ||
-        (slotName === 'UV' && (e.toSlot === '0' || e.toSlot === 0))
+        (slotName === 'UV' && (e.toSlot === '0' || e.toSlot === 0)) ||
+        (slotName === 'X' && (e.toSlot === '1' || e.toSlot === 1)) ||
+        (slotName === 'Y' && (e.toSlot === '2' || e.toSlot === 2)) ||
+        (slotName === 'Z' && (e.toSlot === '3' || e.toSlot === 3)) ||
+        (slotName === 'W' && (e.toSlot === '4' || e.toSlot === 4)) ||
+        (slotName === 'Width' && (e.toSlot === '1' || e.toSlot === 1)) ||
+        (slotName === 'Height' && (e.toSlot === '2' || e.toSlot === 2)) ||
+        (slotName === 'Offset' && (e.toSlot === '2' || e.toSlot === 2)) ||
+        (slotName === 'Tiling' && (e.toSlot === '1' || e.toSlot === 1)) ||
+        (slotName === 'Power' && (e.toSlot === '2' || e.toSlot === 2)) ||
+        (slotName === 'Predicate' && (e.toSlot === '0' || e.toSlot === 0)) ||
+        (slotName === 'True' && (e.toSlot === '1' || e.toSlot === 1)) ||
+        (slotName === 'False' && (e.toSlot === '2' || e.toSlot === 2)) ||
+        (slotName === 'Edge1' && (e.toSlot === '0' || e.toSlot === 0)) ||
+        (slotName === 'Edge2' && (e.toSlot === '1' || e.toSlot === 1))
       ));
       if (edge) {
         const val = varMap.get(`${edge.fromNode}_${edge.fromSlot}`) ||
                     varMap.get(`${edge.fromNode}_Out`) ||
                     varMap.get(`${edge.fromNode}_out`) ||
                     varMap.get(`${edge.fromNode}_0`) ||
+                    varMap.get(`${edge.fromNode}_1`) ||
+                    varMap.get(`${edge.fromNode}_2`) ||
+                    varMap.get(`${edge.fromNode}_3`) ||
+                    varMap.get(`${edge.fromNode}_4`) ||
                     varMap.get(edge.fromNode) ||
                     (edge.fromNode && edge.fromNode.startsWith('_') ? edge.fromNode : null);
         if (val && !val.includes(' ')) return val;
@@ -404,6 +439,7 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         else if (propType === 'Vector3') glslType = 'vec3';
         else if (propType === 'Vector2') glslType = 'vec2';
         else if (propType === 'Texture2D') glslType = 'sampler2D';
+        else if (propType === 'Cubemap') glslType = 'samplerCube';
 
         this.typeMap.set(refName, glslType);
         varMap.set(`${node.id}_Out`, refName);
@@ -414,7 +450,9 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         varMap.set(`${node.id}_G`, `${refName}.g`);
         varMap.set(`${node.id}_B`, `${refName}.b`);
         varMap.set(`${node.id}_A`, `${refName}.a`);
-
+        varMap.set(`${node.id}_X`, `${refName}.x`);
+        varMap.set(`${node.id}_Y`, `${refName}.y`);
+        varMap.set(`${node.id}_Z`, `${refName}.z`);
         if (node.boundProperty) {
           varMap.set(`${node.boundProperty.id}_Out`, refName);
           varMap.set(`prop_${node.boundProperty.name}_Out`, refName);
@@ -535,6 +573,31 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         varMap.set(`${node.id}_G`, `${outVar}.g`);
         varMap.set(`${node.id}_B`, `${outVar}.b`);
         varMap.set(`${node.id}_A`, `${outVar}.a`);
+        break;
+      }
+
+      case 'SampleCubemapNode':
+      case 'SampleCubemap': {
+        const cubeVal = getSlotVal('Cubemap', getSlotVal('Cube', ''));
+        const dirVal = getSlotVal('Direction', getSlotVal('Dir', 'reflect(-ViewDir, Normal)'));
+        const castDir = this.castTo(dirVal, this.inferType(dirVal), 'vec3');
+
+        if (cubeVal && this.typeMap.get(cubeVal) === 'samplerCube') {
+          codeBody.push(`vec4 ${outVar} = texture(${cubeVal}, normalize(${castDir}));`);
+        } else {
+          // Procedural environment reflection fallback if cubemap texture is not bound
+          codeBody.push(`vec4 ${outVar} = vec4(mix(vec3(0.1, 0.2, 0.4), vec3(0.6, 0.8, 1.0), clamp(normalize(${castDir}).y * 0.5 + 0.5, 0.0, 1.0)), 1.0);`);
+        }
+
+        this.typeMap.set(outVar, 'vec4');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_RGBA`, outVar);
+        varMap.set(`${node.id}_R`, `${outVar}.r`);
+        varMap.set(`${node.id}_G`, `${outVar}.g`);
+        varMap.set(`${node.id}_B`, `${outVar}.b`);
+        varMap.set(`${node.id}_A`, `${outVar}.a`);
+        varMap.set(`${node.id}_0`, outVar);
         break;
       }
 
@@ -700,8 +763,12 @@ ${codeBody.map(line => '    ' + line).join('\n')}
 
       case 'MinNode':
       case 'Min':
+      case 'MinimumNode':
+      case 'Minimum':
       case 'MaxNode':
-      case 'Max': {
+      case 'Max':
+      case 'MaximumNode':
+      case 'Maximum': {
         const isMax = node.type.includes('Max');
         const a = getSlotVal('A', '0.0');
         const b = getSlotVal('B', '0.0');
@@ -714,8 +781,204 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         codeBody.push(`${outType} ${outVar} = ${func}(${castA}, ${castB});`);
         this.typeMap.set(outVar, outType);
         varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_2`, outVar);
         break;
       }
+
+      case 'DotProductNode':
+      case 'DotProduct':
+      case 'DotNode':
+      case 'Dot': {
+        const a = getSlotVal('A', 'vec3(0.0)');
+        const b = getSlotVal('B', 'vec3(0.0)');
+        const tA = this.inferType(a);
+        const tB = this.inferType(b);
+        const commonType = this.promoteType(tA, tB);
+        const castA = this.castTo(a, tA, commonType);
+        const castB = this.castTo(b, tB, commonType);
+        codeBody.push(`float ${outVar} = dot(${castA}, ${castB});`);
+        this.typeMap.set(outVar, 'float');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_2`, outVar);
+        break;
+      }
+
+      case 'CrossProductNode':
+      case 'CrossProduct':
+      case 'CrossNode':
+      case 'Cross': {
+        const a = getSlotVal('A', 'vec3(0.0)');
+        const b = getSlotVal('B', 'vec3(0.0)');
+        const castA = this.castTo(a, this.inferType(a), 'vec3');
+        const castB = this.castTo(b, this.inferType(b), 'vec3');
+        codeBody.push(`vec3 ${outVar} = cross(${castA}, ${castB});`);
+        this.typeMap.set(outVar, 'vec3');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_2`, outVar);
+        break;
+      }
+
+      case 'NormalizeNode':
+      case 'Normalize': {
+        const inVal = getSlotVal('In', 'vec3(0.0)');
+        const inType = this.inferType(inVal);
+        const castIn = this.castTo(inVal, inType, inType);
+        codeBody.push(`${inType} ${outVar} = normalize(${castIn});`);
+        this.typeMap.set(outVar, inType);
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_1`, outVar);
+        break;
+      }
+
+      case 'NegateNode':
+      case 'Negate': {
+        const inVal = getSlotVal('In', '0.0');
+        const inType = this.inferType(inVal);
+        const castIn = this.castTo(inVal, inType, inType);
+        codeBody.push(`${inType} ${outVar} = -(${castIn});`);
+        this.typeMap.set(outVar, inType);
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_1`, outVar);
+        break;
+      }
+
+      case 'SwizzleNode':
+      case 'Swizzle': {
+        const inVal = getSlotVal('In', 'vec4(0.0)');
+        const mask = (node.raw && (node.raw.convertedMask || node.raw._maskInput || node.raw.m_Mask)) || 'x';
+        const inType = this.inferType(inVal);
+        const vec4Val = this.castTo(inVal, inType, 'vec4');
+        let outType = 'float';
+        if (mask.length === 2) outType = 'vec2';
+        else if (mask.length === 3) outType = 'vec3';
+        else if (mask.length === 4) outType = 'vec4';
+
+        codeBody.push(`${outType} ${outVar} = ${vec4Val}.${mask};`);
+        this.typeMap.set(outVar, outType);
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_1`, outVar);
+        break;
+      }
+
+      case 'BranchNode':
+      case 'Branch': {
+        const predicate = getSlotVal('Predicate', getSlotVal('Bool', 'true'));
+        const trueVal = getSlotVal('True', '1.0');
+        const falseVal = getSlotVal('False', '0.0');
+        const tT = this.inferType(trueVal);
+        const tF = this.inferType(falseVal);
+        const outType = this.promoteType(tT, tF);
+        const castTrue = this.castTo(trueVal, tT, outType);
+        const castFalse = this.castTo(falseVal, tF, outType);
+        const castPred = this.castTo(predicate, this.inferType(predicate), 'float');
+        codeBody.push(`${outType} ${outVar} = (${castPred} > 0.5 || ${predicate} == true) ? ${castTrue} : ${castFalse};`);
+        this.typeMap.set(outVar, outType);
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_3`, outVar);
+        break;
+      }
+
+      case 'ComparisonNode':
+      case 'Comparison': {
+        const a = getSlotVal('A', '0.0');
+        const b = getSlotVal('B', '0.0');
+        const compType = (node.raw && node.raw.m_ComparisonType !== undefined) ? node.raw.m_ComparisonType : 0;
+        const castA = this.castTo(a, this.inferType(a), 'float');
+        const castB = this.castTo(b, this.inferType(b), 'float');
+        let op = '==';
+        if (compType === 1) op = '!=';
+        else if (compType === 2) op = '<';
+        else if (compType === 3) op = '<=';
+        else if (compType === 4) op = '>';
+        else if (compType === 5) op = '>=';
+
+        codeBody.push(`float ${outVar} = (${castA} ${op} ${castB}) ? 1.0 : 0.0;`);
+        this.typeMap.set(outVar, 'float');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_2`, outVar);
+        break;
+      }
+
+      case 'SmoothstepNode':
+      case 'Smoothstep': {
+        const edge1 = getSlotVal('Edge1', getSlotVal('InMin', '0.0'));
+        const edge2 = getSlotVal('Edge2', getSlotVal('InMax', '1.0'));
+        const inVal = getSlotVal('In', '0.5');
+        const inType = this.inferType(inVal);
+        const castE1 = this.castTo(edge1, this.inferType(edge1), inType);
+        const castE2 = this.castTo(edge2, this.inferType(edge2), inType);
+        const castIn = this.castTo(inVal, inType, inType);
+        codeBody.push(`${inType} ${outVar} = smoothstep(${castE1}, ${castE2}, ${castIn});`);
+        this.typeMap.set(outVar, inType);
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_3`, outVar);
+        break;
+      }
+
+      case 'CosineNode':
+      case 'Cosine': {
+        const input = getSlotVal('In', 'Time');
+        const castInput = this.castTo(input, this.inferType(input), 'float');
+        codeBody.push(`float ${outVar} = cos(${castInput});`);
+        this.typeMap.set(outVar, 'float');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        break;
+      }
+
+      case 'ViewDirectionNode':
+      case 'ViewDirection':
+        varMap.set(`${node.id}_Out`, 'ViewDir');
+        varMap.set(`${node.id}_out`, 'ViewDir');
+        varMap.set(`${node.id}_0`, 'ViewDir');
+        break;
+
+      case 'NormalVectorNode':
+      case 'NormalVector':
+        varMap.set(`${node.id}_Out`, 'Normal');
+        varMap.set(`${node.id}_out`, 'Normal');
+        varMap.set(`${node.id}_0`, 'Normal');
+        break;
+
+      case 'TangentVectorNode':
+      case 'TangentVector':
+        varMap.set(`${node.id}_Out`, 'vec3(1.0, 0.0, 0.0)');
+        varMap.set(`${node.id}_out`, 'vec3(1.0, 0.0, 0.0)');
+        varMap.set(`${node.id}_0`, 'vec3(1.0, 0.0, 0.0)');
+        break;
+
+      case 'ObjectNode':
+      case 'Object':
+        varMap.set(`${node.id}_Position`, 'v_position');
+        varMap.set(`${node.id}_Scale`, 'vec3(1.0)');
+        varMap.set(`${node.id}_Out`, 'v_position');
+        break;
+
+      case 'ScreenPositionNode':
+      case 'ScreenPosition':
+        varMap.set(`${node.id}_Out`, '(gl_FragCoord.xy / u_resolution)');
+        varMap.set(`${node.id}_out`, '(gl_FragCoord.xy / u_resolution)');
+        varMap.set(`${node.id}_0`, '(gl_FragCoord.xy / u_resolution)');
+        break;
 
       case 'RemapNode':
       case 'Remap': {
@@ -799,6 +1062,108 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         break;
       }
 
+      case 'PreviewNode':
+      case 'Preview': {
+        const inVal = getSlotVal('In', 'vec4(1.0)');
+        const inType = this.inferType(inVal);
+        codeBody.push(`${inType} ${outVar} = ${inVal};`);
+        this.typeMap.set(outVar, inType);
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        varMap.set(`${node.id}_1`, outVar);
+        break;
+      }
+
+      case 'Vector1Node':
+      case 'Vector1':
+      case 'FloatNode':
+      case 'Float': {
+        const val = (node.raw && node.raw.m_Value !== undefined) ? node.raw.m_Value : (node.raw && node.raw.m_DefaultValue !== undefined ? node.raw.m_DefaultValue : 0.0);
+        codeBody.push(`float ${outVar} = ${typeof val === 'number' ? val.toFixed(4) : '0.0'};`);
+        this.typeMap.set(outVar, 'float');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        break;
+      }
+
+      case 'Vector2Node':
+      case 'Vector2': {
+        const x = getSlotVal('X', '0.0');
+        const y = getSlotVal('Y', '0.0');
+        const castX = this.castTo(x, this.inferType(x), 'float');
+        const castY = this.castTo(y, this.inferType(y), 'float');
+        codeBody.push(`vec2 ${outVar} = vec2(${castX}, ${castY});`);
+        this.typeMap.set(outVar, 'vec2');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        break;
+      }
+
+      case 'Vector3Node':
+      case 'Vector3': {
+        const x = getSlotVal('X', '0.0');
+        const y = getSlotVal('Y', '0.0');
+        const z = getSlotVal('Z', '0.0');
+        const castX = this.castTo(x, this.inferType(x), 'float');
+        const castY = this.castTo(y, this.inferType(y), 'float');
+        const castZ = this.castTo(z, this.inferType(z), 'float');
+        codeBody.push(`vec3 ${outVar} = vec3(${castX}, ${castY}, ${castZ});`);
+        this.typeMap.set(outVar, 'vec3');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        break;
+      }
+
+      case 'Vector4Node':
+      case 'Vector4': {
+        const x = getSlotVal('X', '0.0');
+        const y = getSlotVal('Y', '0.0');
+        const z = getSlotVal('Z', '0.0');
+        const w = getSlotVal('W', '0.0');
+        const castX = this.castTo(x, this.inferType(x), 'float');
+        const castY = this.castTo(y, this.inferType(y), 'float');
+        const castZ = this.castTo(z, this.inferType(z), 'float');
+        const castW = this.castTo(w, this.inferType(w), 'float');
+        codeBody.push(`vec4 ${outVar} = vec4(${castX}, ${castY}, ${castZ}, ${castW});`);
+        this.typeMap.set(outVar, 'vec4');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        break;
+      }
+
+      case 'ColorNode':
+      case 'Color': {
+        const c = (node.raw && node.raw.m_Value) ? node.raw.m_Value : { r: 1, g: 1, b: 1, a: 1 };
+        codeBody.push(`vec4 ${outVar} = vec4(${c.r || 0.0}, ${c.g || 0.0}, ${c.b || 0.0}, ${c.a !== undefined ? c.a : 1.0});`);
+        this.typeMap.set(outVar, 'vec4');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_0`, outVar);
+        break;
+      }
+
+      case 'RectangleNode':
+      case 'Rectangle': {
+        this.requireHelper('rectanglePattern');
+        const uvVal = getSlotVal('UV', 'UV.xy');
+        const widthVal = getSlotVal('Width', '0.5');
+        const heightVal = getSlotVal('Height', '0.5');
+        const castUV = this.castTo(uvVal, this.inferType(uvVal), 'vec2');
+        const castW = this.castTo(widthVal, this.inferType(widthVal), 'float');
+        const castH = this.castTo(heightVal, this.inferType(heightVal), 'float');
+        codeBody.push(`float ${outVar} = rectanglePattern(${castUV}, ${castW}, ${castH});`);
+        this.typeMap.set(outVar, 'float');
+        varMap.set(`${node.id}_Out`, outVar);
+        varMap.set(`${node.id}_out`, outVar);
+        varMap.set(`${node.id}_3`, outVar);
+        break;
+      }
+
       case 'SplitNode':
       case 'Split': {
         const inVal = getSlotVal('In', 'vec4(0.0)');
@@ -811,6 +1176,11 @@ ${codeBody.map(line => '    ' + line).join('\n')}
         varMap.set(`${node.id}_G`, `${outVar}.g`);
         varMap.set(`${node.id}_B`, `${outVar}.b`);
         varMap.set(`${node.id}_A`, `${outVar}.a`);
+        varMap.set(`${node.id}_0`, `${outVar}.r`);
+        varMap.set(`${node.id}_1`, `${outVar}.r`);
+        varMap.set(`${node.id}_2`, `${outVar}.g`);
+        varMap.set(`${node.id}_3`, `${outVar}.b`);
+        varMap.set(`${node.id}_4`, `${outVar}.a`);
         break;
       }
 
