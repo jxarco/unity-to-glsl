@@ -58,6 +58,12 @@ class Application {
       // Transpile to GLSL
       this.currentGlslOutput = this.generator.transpile(this.currentParsedGraph);
 
+      // Check for unsupported node fallbacks and show warning toast
+      if (this.currentGlslOutput.unsupportedNodes && this.currentGlslOutput.unsupportedNodes.length > 0) {
+        const nodeList = this.currentGlslOutput.unsupportedNodes.map(n => `"${n.replace('Node', '')}"`).join(', ');
+        this.showToast(`Fallback used for unsupported node types: ${nodeList}`, 'warning', 6500);
+      }
+
       // Update 3D Shader Viewport
       this.preview3D.updateShaderMaterial(
         this.currentGlslOutput.threeVertexShader || this.currentGlslOutput.vertexShader,
@@ -77,6 +83,35 @@ class Application {
       console.error('Error compiling ShaderGraph:', err);
       alert('Error parsing Unity 6 ShaderGraph: ' + err.message);
     }
+  }
+
+  showToast(message, type = 'warning', duration = 5000) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    
+    let icon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:1px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+    if (type === 'error') {
+      icon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+    } else if (type === 'info') {
+      icon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+    }
+
+    toast.innerHTML = `${icon}<div><strong style="display:block; margin-bottom:2px; font-weight:600; font-size:12px;">ShaderGraph Warning</strong><span>${message}</span></div>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('toast-closing');
+      setTimeout(() => {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 300);
+    }, duration);
   }
 
   handleLiveCodeEdit(editedCode, activeTab) {
